@@ -41,7 +41,7 @@ async def move(ctx, members):
     has_role = any(role in [r.id for r in ctx.author.roles] for role in roles)
     
     if not has_role and not ctx.author.guild_permissions.move_members:
-        return await ctx.reply(f'Недостаточно прав на исполнение команды, нужна роль "nedobot move" или права на перемещение участников', ephemeral=True)
+        return await ctx.reply(f'Недостаточно прав на исполнение команды, нужна роль {roles} или права на перемещение участников', ephemeral=True)
     
     for member in members:
         if member.voice is None:  # Проверка, подключен ли участник к голосовому каналу

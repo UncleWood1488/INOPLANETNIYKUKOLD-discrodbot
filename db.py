@@ -1,30 +1,23 @@
-import datetime
 import psycopg2
 from psycopg2 import sql
 import time
 import random
-from config import new_worker_balance, cooldown, new_fisher
+from datetime import datetime
+from config import new_worker_balance, cooldown, new_fisher, db
 
 # Подключение к PostgreSQL
-conn = psycopg2.connect(
-    dbname="postgres",
-    user="postgres",
-    password="postgres",
-    host="localhost",
-    port="5432"
-)
-
-# Подключение к базе данных
-def get_connection():
-    return psycopg2.connect(
-        dbname="nedobase",
-        user="",
-        password="",
-        host="localhost",
-        port="5432"
-    )
+conn = psycopg2.connect(**db)
 
 cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    user_id BIGINT PRIMARY KEY,
+    balance INTEGER NOT NULL,
+    fishing_level INTEGER NOT NULL,
+    last_work TIMESTAMP
+)
+""")
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS coins (
@@ -65,6 +58,10 @@ CREATE TABLE IF NOT EXISTS fish (
 # )
 # """)
 
+# Подключение к базе данных
+def get_connection():
+    return psycopg2.connect(**db)
+
 #-----------------------------------------------------------------------------------ВАЛЮТА
 # Регистрация пользователя
 def register_user(user_id):
@@ -78,9 +75,11 @@ def register_user(user_id):
 
 # Проверка баланса
 def is_enought(memberid, need):
-    cursor.execute("SELECT coins FROM coins WHERE member = %s", (memberid,))
-    s = cursor.fetchone()
-    return s[0] >= need if s else False
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT coins FROM coins WHERE member = %s", (memberid,))
+            s = cur.fetchone()
+            return s[0] >= need if s else False
 
 # Получение баланса
 def get_balance(user_id):
@@ -124,12 +123,12 @@ def set_cooldown(user_id, action):
             conn.commit()
 
 def get_add_cooldowns(member):
-    cursor.execute("SELECT work, fishing FROM cooldowns WHERE member = ?", (member,))
+    cursor.execute("SELECT work, fishing FROM cooldowns WHERE member = %s", (member,))
     result = cursor.fetchone()
     return result if result else (0, 0)
 
 def get_cooldown(member, skill):
-    if not is_member_exists(member)['cooldowns']:
+    if not is_member_exists(member):
         return 0
     
     if skill not in ['work', 'fishing']:
@@ -161,8 +160,11 @@ def is_cooldown(user_id, action):
 #-----------------------------------------------------------------------------------РЫБАЛКА
 def fishing(member):
     random_fish = random.choice(['Cod', 'Salmon', 'Tropical', 'Squid'])
-    cursor.execute(f"UPDATE fish SET {random_fish} = {random_fish} + 1 WHERE member = %s", (member,))
-    conn.commit()
+    query = sql.SQL("UPDATE fish SET {} = {} + 1 WHERE member = %s").format(
+        sql.Identifier(random_fish),
+        sql.Identifier(random_fish)
+    )
+    cursor.execute(query, (member,))
 
 def sellfish(member):
     cursor.execute("SELECT Cod, Salmon, Tropical, Squid FROM fish WHERE member = %s", (member,))
@@ -183,11 +185,13 @@ def add_money(memberid, amount):
 
 # Передача денег между пользователями
 def transfer_money(sender_id, receiver_id, amount):
-    if amount < 0:
-        raise ValueError("Количество денег не может быть отрицательным.")
-    if not is_enought(sender_id, amount):
-        raise ValueError("Недостаточно средств для перевода.")
-    cursor.execute("UPDATE coins SET coins = coins - %s WHERE member = %s", (amount, sender_id))
-    cursor.execute("UPDATE coins SET coins = coins + %s WHERE member = %s", (amount, receiver_id))
-    conn.commit()
-    print(f"Переведено {amount} монет от пользователя {sender_id} пользователю {receiver_id}.")
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("BEGIN")
+                cur.execute("UPDATE coins SET coins = coins - %s WHERE member = %s", (amount, sender_id))
+                cur.execute("UPDATE coins SET coins = coins + %s WHERE member = %s", (amount, receiver_id))
+                conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise
