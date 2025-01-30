@@ -2,7 +2,7 @@ import discord
 import time
 import db
 import buttons
-
+import sqlite3
 # from snake import Snake
 from blackjack import blackjack
 from random import *
@@ -77,10 +77,10 @@ async def help(ctx):
 async def balance(ctx):
     emb = discord.Embed(title = '```🍉IONOTEKA BANK🍉```', colour = discord.Color.brand_green())
     emb.set_author(name = ctx.author.name, icon_url = ctx.author.avatar.url)
-    if db.balance(ctx.author.id) <= 4:
-        emb.add_field(name = 'Ваш баланс:', value = f'{db.balance(ctx.author.id)} скуфкоина <:skufcoin:1248834544233353227>', )
+    if db.get_balance(ctx.author.id) <= 4:
+        emb.add_field(name = 'Ваш баланс:', value = f'{db.get_balance(ctx.author.id)} скуфкоина <:skufcoin:1248834544233353227>', )
         return await ctx.reply(embed=emb, ephemeral=True)
-    emb.add_field(name = 'Ваш баланс:', value = f'{db.balance(ctx.author.id)} скуфкоинов <:skufcoin:1248834544233353227>', )
+    emb.add_field(name = 'Ваш баланс:', value = f'{db.get_balance(ctx.author.id)} скуфкоинов <:skufcoin:1248834544233353227>', )
     await ctx.reply(embed=emb, ephemeral=True)
 
 #ВЫДАТЬ ДЕНЬГИ
@@ -96,26 +96,26 @@ async def balance(ctx):
 
 #РАБОТА
 async def work(ctx):
-    member = ctx.author.id
+    user_id = ctx.author.id
 
-    if not db.is_member_exists(member)['coins']:
-        db.register(member)
+    if not db.is_user_exists(user_id):
+        db.register_user(user_id)
         return await ctx.reply(f' Новый работник! Вам выдали начальный капитал: {new_worker_balance} скуфкоинов <:skufcoin:1248834544233353227>')
     
-    if db.is_cooldown(member, 'work'):
-        cd = db.get_cooldown(member, 'work')
+    if db.is_cooldown(user_id, 'work'):
+        cd = db.get_cooldown(user_id, 'work')
         return await ctx.reply(f'{ctx.author.mention} устал и не может работать, кулдаун: {cd}')
     
-    db.update_balance(member, pay['work'] * multiplier)
-    db.set_cooldown(member, 'work', cooldown['work'])
+    db.update_balance(user_id, pay['work'] * multiplier)
+    db.set_cooldown(user_id, 'work', cooldown['work'])
     await ctx.reply(f'{ctx.author.mention} сходил на работу! +100 <:skufcoin:1248834544233353227>')
 
 #МАГАЗИН
 async def shop(ctx):
     emb = discord.Embed(title= 'Магазин', colour = discord.Color.gold(), )
     emb.set_author(name = ctx.bot.application.name, icon_url = ctx.bot.application.icon)
-    emb.add_field(name = 'Ваш баланс:', value = f'{db.balance(ctx.author.id)} скуфкоинов <:skufcoin:1248834544233353227>', )
-    emb.add_field(name = db.fishing(), value = '')
+    emb.add_field(name = 'Ваш баланс:', value = f'{db.get_balance(ctx.author.id)} скуфкоинов <:skufcoin:1248834544233353227>', )
+    emb.add_field(name="Рыбалка", value=db.get_fishing_stats(ctx.author.id))
     await ctx.reply(embed=emb, ephemeral=True)
 
 #БЛЕКДЖЕК
@@ -136,19 +136,22 @@ async def bj(ctx, bet):
 #РЫБАЛКА
 #Нужно добавить обновление бд
 async def fishing(ctx):
-    member = ctx.author.id
+    user_id = ctx.author.id
     
-    if not db.balance(member):  # Если пользователь не зарегистрирован
-        db.register(member)
+    if not db.get_balance(user_id):  # Если пользователь не зарегистрирован
+        db.register_user(user_id)
         return await ctx.reply(f'Новый рыбачок! Вам выдали начальный капитал: 100 скуфкоинов <:skufcoin:1248834544233353227>')
     
-    if db.is_cooldown(member, 'fishing'):
-        return await ctx.reply(f'{ctx.author.mention} устал и не может рыбачить, кулдаун: 1 час')
+    remaining = db.get_cooldown(user_id, 'fishing')
+    await ctx.reply(f"Кулдаун: {remaining//60} мин.")
     
     # Ловля рыбы
     fish_reward = randint(10, 50)
-    db.update(member, fish_reward)
-    db.set_cooldown(member, 'fishing')
+    try:
+        db.update_balance(user_id, fish_reward)
+    except sqlite3.Error as e:
+        await ctx.send("Ошибка обновления баланса")
+    db.set_cooldown(user_id, 'fishing')
     
     emb = discord.Embed(title='Рыбалка', color=discord.Color.blue())
     emb.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)

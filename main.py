@@ -1,8 +1,9 @@
 import discord
 import traceback
+import logging
 import functions
-from discord.ext import commands, tasks
-from discord import Guild, Member, MemberFlags, app_commands
+from discord.ext import commands
+from discord import app_commands
 from discord.ext.commands import Greedy
 from config import BOT_TOKEN, BOT_PREFIX
 from functions import log
@@ -13,6 +14,16 @@ from typing import Self
 from cogs.musicCog import MusicCog
 from cogs.errorCog import ErrorCog
 from cogs.otherCog import CommandsCog
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(levelname)s | %(message)s',
+    handlers=[
+        logging.FileHandler('bot.log'),
+        logging.StreamHandler()
+    ]
+)
 
 # variables bl0ck
 intents = discord.Intents.all()

@@ -1,22 +1,12 @@
 import os
 from random import *
-BOT_TOKEN = os.environ.get('BOT_TOKEN') or ""
+BOT_TOKEN = os.environ.get('BOT_TOKEN') or "NjAzOTM4OTUzNzQ5NDYzMDUw.GGMGPi.jqEIV5-X2Wh3jm99wUaNLn6Zj6qEj6nufk0Pm8"
 BOT_PREFIX = os.environ.get('BOT_PREFIX') or '.'
 PROXY_SCHEMA = os.environ.get('PROXY_SCHEMA') or "http"
 PROXY_HOST = os.environ.get('PROXY_HOST') or "localhost"
 PROXY_PORT = os.environ.get('PROXY_PORT') or 3130
 PROXY_USER = os.environ.get('PROXY_USER') or ""
 PROXY_PASSWORD = os.environ.get('PROXY_PASSWORD') or ""
-
-
-db = {
-    'host': os.environ.get('DB_HOST') or "localhost",
-    'port': os.environ.get('DB_PORT') or 5432,
-    'database': os.environ.get('DB_NAME') or "postgres",
-    'user': os.environ.get('DB_USER') or "postgres",
-    'password': os.environ.get('DB_PASSWORD') or "postgres".encode('utf-8'),
-}
-
 
 # Настройки кулдаунов (в секундах)
 cooldown = {
