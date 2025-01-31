@@ -38,8 +38,8 @@ def init_db():
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS cooldowns (
             user_id INTEGER PRIMARY KEY,
-            work_cooldown INTEGER,
-            fishing_cooldown INTEGER
+            work_cooldown REAL,
+            fishing_cooldown REAL
         )""")
         
         # Создание таблицы fish
@@ -106,6 +106,12 @@ def register_user(user_id):
             INSERT OR IGNORE INTO coins (user_id, coins)
             VALUES (?, ?)
         """, (user_id, 0))
+
+        # Регистрация в fish
+        conn.execute("""
+            INSERT OR IGNORE INTO fish (user_id) 
+            VALUES (?)
+        """, (user_id,))
         
         conn.commit()
         
@@ -148,23 +154,21 @@ def is_user_exists(user_id):
         return cursor.fetchone() is not None
 
 # Установка кулдауна
-def set_cooldown(user_id: int, action: str, timestamp: float = None):
+def set_cooldown(user_id: int, action: str, duration: int):
+    """Устанавливает кулдаун (время окончания = текущее время + длительность)."""
     action_map = {
         'work': 'work_cooldown',
         'fishing': 'fishing_cooldown'
     }
     column = action_map.get(action)
     if not column:
-        raise ValueError("Недопустимое действие")
-
-    timestamp = timestamp or time.time()
-
+        return
+    
+    end_time = time.time() + duration
     with get_connection() as conn:
-        cur = conn.cursor()
-        # Обновляем таблицу cooldowns
-        cur.execute(
+        conn.execute(
             f"UPDATE cooldowns SET {column} = ? WHERE user_id = ?",
-            (timestamp, user_id)
+            (end_time, user_id)
         )
         conn.commit()
 
@@ -179,51 +183,45 @@ def get_add_cooldowns(user_id):
         return result if result else (0, 0)
 
 def get_cooldown(user_id: int, action: str) -> float:
+    """Возвращает оставшееся время кулдауна в секундах."""
     action_map = {
         'work': 'work_cooldown',
         'fishing': 'fishing_cooldown'
     }
     column = action_map.get(action)
     if not column:
-        raise ValueError("Недопустимое действие")
+        return 0.0
     
     with get_connection() as conn:
         result = conn.execute(
             f"SELECT {column} FROM cooldowns WHERE user_id = ?",
             (user_id,)
         ).fetchone()
-        
-    if not result or not result[0]:
+    
+    if not result or result[0] is None:
         return 0.0
-        
+    
     remaining = result[0] - time.time()
-    return max(0.0, remaining)
-
-# Проверка кулдауна
-def is_cooldown(user_id, action):
-    with get_connection() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT last_work FROM users WHERE user_id = ?", (user_id,))
-        result = cur.fetchone()
-        if not result or not result[0]:
-            return False
-        last_work = datetime.strptime(result[0], '%Y-%m-%d %H:%M:%S')
-        return (datetime.now() - last_work).total_seconds() < 3600
+    return max(0.0, remaining)  # Не может быть отрицательным
 
 #-----------------------------------------------------------------------------------РЫБАЛКА
-def fishing(user_id):
-    fish_columns = ['cod', 'salmon', 'tropical', 'squid']
-    random_fish = random.choice(fish_columns)
+def fishing(user_id: int) -> str:
+    """Добавляет случайную рыбу пользователю и возвращает её тип"""
+    fish_types = ['cod', 'salmon', 'tropical', 'squid']
+    random_fish = random.choice(fish_types)
+    
     with get_connection() as conn:
         cursor = conn.cursor()
-        # Проверяем, существует ли запись
+        # Создаем запись если не существует
         cursor.execute("INSERT OR IGNORE INTO fish (user_id) VALUES (?)", (user_id,))
-        # Обновляем счетчик рыбы
+        # Обновляем счетчик
         cursor.execute(
             f"UPDATE fish SET {random_fish} = {random_fish} + 1 WHERE user_id = ?",
             (user_id,)
         )
         conn.commit()
+    
+    return random_fish
 
 def sellfish(user_id):
     with get_connection() as conn:
@@ -238,6 +236,22 @@ def sellfish(user_id):
                 (user_id,)
             )
             conn.commit()
+
+def get_fishing_stats(user_id: int) -> dict:
+    """Получить статистику рыбалки пользователя"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT cod, salmon, tropical, squid 
+            FROM fish 
+            WHERE user_id = ?
+        """, (user_id,))
+        result = cursor.fetchone()
+        
+    if not result:
+        return {"cod": 0, "salmon": 0, "tropical": 0, "squid": 0}
+        
+    return dict(result)
 
 #-----------------------------------------------------------------------------------ДЕНЬГИ
 def add_money(memberid, amount):

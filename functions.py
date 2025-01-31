@@ -2,7 +2,8 @@ import discord
 import time
 import db
 import buttons
-import sqlite3
+from embedshop import create_welcome_embed, create_main_embed
+from shop import ShopView
 # from snake import Snake
 from blackjack import blackjack
 from random import *
@@ -15,8 +16,8 @@ snakeplayers = {}
 
 def get_online_members(bot):
     gen = bot.get_all_members()
-    members = [next(gen) for i in range(len(bot.users))]
-    online_members = [member.name for member in members if member.status != discord.Status.offline]
+    members = list(bot.get_all_members())
+    online_members = [m.name for m in members if m.status != discord.Status.offline]
     return online_members
 
 def replace_mention(message):
@@ -100,11 +101,14 @@ async def work(ctx):
 
     if not db.is_user_exists(user_id):
         db.register_user(user_id)
-        return await ctx.reply(f' Новый работник! Вам выдали начальный капитал: {new_worker_balance} скуфкоинов <:skufcoin:1248834544233353227>')
+        return await ctx.reply(f'Новый работник! Вам выдали начальный капитал: {new_worker_balance} скуфкоинов <:skufcoin:1248834544233353227>')
     
-    if db.is_cooldown(user_id, 'work'):
-        cd = db.get_cooldown(user_id, 'work')
-        return await ctx.reply(f'{ctx.author.mention} устал и не может работать, кулдаун: {cd}')
+    remaining = db.get_cooldown(user_id, 'work')
+    print(f"[DEBUG] Кулдаун работы для {user_id}: {remaining} сек.")  # Логирование
+    
+    if remaining > 0:
+        cd = f"{int(remaining // 60)} мин. {int(remaining % 60)} сек."
+        return await ctx.reply(f'{ctx.author.mention}, устал и не может работать. Кулдаун: {cd}')
     
     db.update_balance(user_id, pay['work'] * multiplier)
     db.set_cooldown(user_id, 'work', cooldown['work'])
@@ -112,11 +116,21 @@ async def work(ctx):
 
 #МАГАЗИН
 async def shop(ctx):
-    emb = discord.Embed(title= 'Магазин', colour = discord.Color.gold(), )
-    emb.set_author(name = ctx.bot.application.name, icon_url = ctx.bot.application.icon)
-    emb.add_field(name = 'Ваш баланс:', value = f'{db.get_balance(ctx.author.id)} скуфкоинов <:skufcoin:1248834544233353227>', )
-    emb.add_field(name="Рыбалка", value=db.get_fishing_stats(ctx.author.id))
-    await ctx.reply(embed=emb, ephemeral=True)
+    user = ctx.author
+    
+    if not db.is_user_exists(user.id):
+        db.register_user(user.id)
+        return await ctx.reply(
+            embed=create_welcome_embed(ctx.bot),
+            ephemeral=True
+        )
+    
+    view = ShopView(user)
+    await ctx.reply(
+        embed=create_main_embed(user),
+        view=view,
+        ephemeral=True
+    )
 
 #БЛЕКДЖЕК
 async def bj(ctx, bet):
@@ -134,30 +148,53 @@ async def bj(ctx, bet):
 
 
 #РЫБАЛКА
-#Нужно добавить обновление бд
 async def fishing(ctx):
     user_id = ctx.author.id
     
-    if not db.get_balance(user_id):  # Если пользователь не зарегистрирован
+    # Проверка регистрации
+    if not db.is_user_exists(user_id):
         db.register_user(user_id)
         return await ctx.reply(f'Новый рыбачок! Вам выдали начальный капитал: 100 скуфкоинов <:skufcoin:1248834544233353227>')
-    
-    remaining = db.get_cooldown(user_id, 'fishing')
-    await ctx.reply(f"Кулдаун: {remaining//60} мин.")
-    
-    # Ловля рыбы
-    fish_reward = randint(10, 50)
-    try:
-        db.update_balance(user_id, fish_reward)
-    except sqlite3.Error as e:
-        await ctx.send("Ошибка обновления баланса")
-    db.set_cooldown(user_id, 'fishing')
-    
-    emb = discord.Embed(title='Рыбалка', color=discord.Color.blue())
-    emb.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)
-    emb.add_field(name="Ты поймал:", value=f"🐟 Рыба (+{fish_reward} скуфкоинов)")
-    await ctx.reply(embed=emb)
 
+    # Проверка кулдауна
+    remaining = db.get_cooldown(user_id, 'fishing')
+    if remaining > 0:
+        minutes = int(remaining // 60)
+        seconds = int(remaining % 60)
+        cd = f"{minutes} мин. {seconds} сек."
+        return await ctx.reply(f"⏳ Подождите {cd}!", ephemeral=True)  # return здесь!
+
+    # Ловля рыбы
+    caught_fish = db.fishing(user_id)  # Возвращает тип рыбы
+    
+    # Словарь для красивых названий
+    fish_data = {
+        'cod': {'name': 'Треска', 'emoji': '<:Fish_Raw_Cod:1327154668463325216>'},
+        'salmon': {'name': 'Лосось', 'emoji': '<:Fish_Raw_Salmon:1327154686335385641>'},
+        'tropical': {'name': 'Тропическая рыба', 'emoji': '<:Fish_Tropical:1327154699383607317>'},
+        'squid': {'name': 'Кальмар', 'emoji': '<:Fish_Squid:1327427600888500326>'}
+    }
+    
+    # Установка кулдауна (передаем длительность, а не время)
+    db.set_cooldown(user_id, 'fishing', cooldown['fishing'])
+
+    # Создание embed
+    emb = discord.Embed(
+        title="<:Fishing_Rod:1327154633818509322> Результаты рыбалки",
+        color=discord.Color.blue(),
+        description=f"{fish_data[caught_fish]['emoji']} Вы поймали {fish_data[caught_fish]['name']}!"
+    )
+    emb.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
+    
+    # Статистика рыбы
+    fish_stats = db.get_fishing_stats(user_id)
+    stats_text = "\n".join(
+        f"{fish_data[fish]['emoji']} {fish_data[fish]['name']}: {count}"
+        for fish, count in fish_stats.items()
+    )
+    emb.add_field(name="Ваш улов", value=stats_text, inline=False)
+
+    await ctx.reply(embed=emb, ephemeral=True)
 
 
 # async def snakemsg(ctx):

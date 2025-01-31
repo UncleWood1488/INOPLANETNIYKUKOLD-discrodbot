@@ -1,5 +1,6 @@
 import discord
 
+#=========================================================================================================БЛЕКДЖЕК
 async def bj_buttons(ctx, bjplayers):
     async def button_hit_callback(interaction):
         if ctx.author.id != interaction.user.id:
@@ -41,7 +42,8 @@ async def bj_buttons(ctx, bjplayers):
     bj_buttons.add_item(button_stay)
 
     return bj_buttons
-
+#=========================================================================================================БЛЕКДЖЕК
+#=========================================================================================================ЗМЕЙКА
 async def snake_buttons(ctx, snakeplayers):
     async def button_up_callback(interaction):
         if ctx.author.id != interaction.user.id:
@@ -125,3 +127,4 @@ async def snake_buttons(ctx, snakeplayers):
     snake_buttons.add_item(button_right)
 
     return snake_buttons
+#=========================================================================================================ЗМЕЙКА

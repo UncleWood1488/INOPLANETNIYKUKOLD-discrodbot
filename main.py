@@ -11,9 +11,6 @@ from emoji import *
 from enum import member
 from random import choice
 from typing import Self
-from cogs.musicCog import MusicCog
-from cogs.errorCog import ErrorCog
-from cogs.otherCog import CommandsCog
 
 # Настройка логирования
 logging.basicConfig(
@@ -53,11 +50,6 @@ async def on_ready():
         print('{0:*^60}'.format(f"{guild}: {[i.name for i in synced]}")) # print name of commands on every guild
     print('{0:*^60}'.format('Done!'))
     print('{0:#^60}'.format(''))
-
-
-bot.add_cog(MusicCog(bot))
-bot.add_cog(CommandsCog(bot))
-bot.add_cog(ErrorCog(bot))
 
 @bot.event
 async def on_guild_join(guild):
