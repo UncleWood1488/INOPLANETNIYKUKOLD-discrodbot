@@ -1,7 +1,10 @@
 import discord
+from discord.ext import commands
 import time
 import db
 import buttons
+import logging
+from embedmusicplayer import *
 from embedshop import create_welcome_embed, create_main_embed
 from shop import ShopView
 # from snake import Snake
@@ -9,9 +12,14 @@ from blackjack import blackjack
 from random import *
 from emoji import *
 from config import pay, cooldown, multiplier, new_worker_balance, fish
+from discord import FFmpegPCMAudio
+from yt_dlp import YoutubeDL, DownloadError
+import asyncio
 
+logger = logging.getLogger(__name__)
 bjplayers = {}
 snakeplayers = {}
+music_players = {}
 
 
 def get_online_members(bot):
@@ -72,8 +80,208 @@ async def help(ctx):
     await ctx.reply(embed=emb, ephemeral=True)
 
 # #МУЗЫКАЛЬНЫЙ ПЛЕЕР
+def get_music_player(guild_id):
+    if guild_id not in music_players:
+        music_players[guild_id] = {
+            'queue': [],
+            'in_voice': False,
+            'voice_channel': None,
+            'chat_channel': None,
+            'paused': False,
+            'yt_options': {
+                # YouTubeDL параметры
+                'default_search': 'auto',
+                'format': 'bestaudio/best',
+                'noplaylist': True,
+                'ignoreerrors': False,
+                'quiet': False,
+                'no_warnings': False,
+                'geo_bypass': True,
+                'age_limit': 0,
+                'force-ipv4': True,
+                'verbose': True,
+                'cookiefile': 'cookies.txt',
+                'headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                },
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'extractor_retries': 3,
+                'socket_timeout': 10
+            },
+            'ffmpeg_options': {
+                # FFmpeg параметры
+                'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -nostdin',
+                'options': '-vn -acodec libmp3lame'
+            }
+        }
+    return music_players[guild_id]
 
+async def yt_query(query):
+    try:
+        ydl_opts = get_music_player(0)['yt_options']
+        with YoutubeDL(ydl_opts) as yt:
+            logger.debug(f"[YT] Запрос: {query}")
+            
+            # Скачать и обработать данные
+            info = yt.extract_info(query, download=False)
+            
+            # Если видео приватное или требует авторизации
+            if info.get('is_unavailable'):
+                raise DownloadError("Видео недоступно (приватное или удалено)")
+                
+            if 'entries' in info:
+                track_info = info['entries'][0]
+            else:
+                track_info = info
+                
+            if not track_info.get('formats'):
+                raise DownloadError("Нет аудиоформатов")
+                
+        return {
+            'source': track_info['formats'][0]['url'],
+            'title': track_info['title'],
+            'url': track_info['webpage_url']
+        }
+    except Exception as e:
+        logger.error(f"[YT] Ошибка: {str(e)}", exc_info=True)
+        raise DownloadError(f"Ошибка YouTube: {str(e)}")
+    
+async def play_next(ctx):
+    try:
+        player = get_music_player(ctx.guild.id)
+        logger.debug(f"[NEXT] Очередь до извлечения: {len(player['queue'])} треков")
+        
+        if not player['queue']:
+            logger.info("[NEXT] Очередь пуста")
+            return
+        
+        voice = ctx.voice_client
+        if not voice or not voice.is_connected():
+            logger.warning("[NEXT] Бот не подключен к голосовому каналу")
+            return
 
+        current = player['queue'].pop(0)
+        logger.info(f"[NEXT] Воспроизведение трека: {current['title']}")
+        logger.debug(f"[NEXT] Очередь после извлечения: {len(player['queue'])} треков")
+
+        await asyncio.sleep(0.5)
+        voice.play(
+            FFmpegPCMAudio(current['source'], **player['ffmpeg_options']),
+            after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop)
+        )
+        logger.info("[NEXT] Воспроизведение запущено")
+        await ctx.send(embed=now_playing_embed(current['title'], current['url']))
+
+    except Exception as e:
+        logger.error(f"[NEXT] Ошибка: {str(e)}", exc_info=True)
+        await ctx.send(embed=error_embed(f"Ошибка: {str(e)}"))
+
+async def play_music(ctx, query):
+    try:
+        logger.info(f"[PLAY] Запрос от {ctx.author}: {query}")
+        player = get_music_player(ctx.guild.id)
+        logger.debug(f"[PLAY] Состояние плеера для гильдии {ctx.guild.id}: {player}")
+
+        # Проверка подключения пользователя к голосовому каналу
+        if not ctx.author.voice:
+            logger.warning(f"[PLAY] Пользователь {ctx.author} не в голосовом канале")
+            await ctx.send("Вы не в голосовом канале!")
+            return
+            
+        voice_client = ctx.voice_client
+        logger.debug(f"[PLAY] Текущий голосовой клиент: {voice_client}")
+
+        # Подключение/переподключение к каналу
+        if not voice_client or not voice_client.is_connected():
+            logger.info(f"[PLAY] Подключение к каналу {ctx.author.voice.channel}")
+            voice_client = await ctx.author.voice.channel.connect()
+            await asyncio.sleep(1)
+        elif voice_client.channel != ctx.author.voice.channel:
+            logger.info(f"[PLAY] Перемещение в канал {ctx.author.voice.channel}")
+            await voice_client.move_to(ctx.author.voice.channel)
+
+        # Добавление трека в очередь
+        logger.info(f"[PLAY] Поиск трека: {query}")
+        track = await yt_query(query)
+        player['queue'].append(track)
+        logger.debug(f"[PLAY] Очередь после добавления: {len(player['queue'])} треков")
+
+        if not ctx.voice_client.is_playing():
+            logger.info("[PLAY] Запуск воспроизведения")
+            await play_next(ctx)
+        else:
+            logger.info(f"[PLAY] Трек добавлен в очередь: {track['title']}")
+            await ctx.send(f"Добавлено в очередь: {track['title']}")
+
+    except DownloadError as e:
+        logger.error(f"[PLAY] Ошибка загрузки: {str(e)}", exc_info=True)
+        await ctx.send(embed=error_embed(str(e)))
+    except Exception as e:
+        logger.critical(f"[PLAY] Критическая ошибка: {str(e)}", exc_info=True)
+        await ctx.send(embed=error_embed(f"Неизвестная ошибка: {str(e)}"))
+
+async def skip_music(ctx):
+    voice = ctx.voice_client
+    if not voice or not voice.is_connected():
+        return await ctx.send("Бот не подключен к голосовому каналу")
+    
+    if voice.is_playing():
+        voice.stop()
+        await ctx.send("Трек пропущен")
+        await play_next(ctx)
+    else:
+        await ctx.send("Нет активного воспроизведения")
+
+async def pause_music(ctx):
+    player = get_music_player(ctx.guild.id)
+    voice = ctx.voice_client
+    if voice and voice.is_playing():
+        voice.pause()
+        player['paused'] = True
+        await ctx.send("Воспроизведение приостановлено")
+
+async def resume_music(ctx):
+    player = get_music_player(ctx.guild.id)
+    voice = ctx.voice_client
+    if voice and voice.is_paused():
+        voice.resume()
+        player['paused'] = False
+        await ctx.send("Воспроизведение возобновлено")
+
+async def stop_music(ctx):
+    player = get_music_player(ctx.guild.id)
+    voice = ctx.voice_client
+    if voice and voice.is_connected():
+        await voice.disconnect()
+        player.clear()
+        await ctx.send("Воспроизведение остановлено")
+
+async def show_queue(ctx):
+    player = get_music_player(ctx.guild.id)
+    if not player['queue']:
+        await ctx.send("Очередь пуста")
+        return
+    
+    queue_list = "\n".join([f"{i+1}. {item['title']}" for i, item in enumerate(player['queue'])])
+    await ctx.send(f"**Очередь воспроизведения:**\n{queue_list}")
+
+# Обработчики ошибок
+async def on_voice_state_update(member, before, after):
+    if member.bot and not after.channel:
+        guild_id = member.guild.id
+        if guild_id in music_players:
+            del music_players[guild_id]
+
+async def handle_play_error(ctx, error):
+    if isinstance(error, DownloadError):
+        await ctx.send("Ошибка загрузки трека")
+    elif isinstance(error, commands.CommandInvokeError):
+        await ctx.send("Ошибка выполнения команды")
 #БАЛАНС
 async def balance(ctx):
     emb = discord.Embed(title = '```🍉IONOTEKA BANK🍉```', colour = discord.Color.brand_green())
@@ -85,15 +293,16 @@ async def balance(ctx):
     await ctx.reply(embed=emb, ephemeral=True)
 
 #ВЫДАТЬ ДЕНЬГИ
-# async def addmoney(ctx, member,):
-#     print(member)
-#     if not ctx.guild.get_role(406211889228546048, 406212152316395574, 406212396806569984, 430721367592140803) in ctx.author.roles and not ctx.author.guild_permissions.move_members:
-#         return await ctx.reply(f'Недостаточно прав на исполнение команды.')
+async def addmoney(ctx, member: discord.Member, coins: int):
+    roles = [406211889228546048, 406212152316395574, 406212396806569984, 430721367592140803]
+    if not any(role in [r.id for r in ctx.author.roles] for role in roles) and not ctx.author.guild_permissions.administrator:
+        return await ctx.reply('Недостаточно прав!', ephemeral=True)
     
-#     if not db.is_member_exists(member)['coins']:
-#         return await ctx.reply(f'Данный участник ещё не работал, напишите команду /work чтобы зарегистрировать свой счёт в банке сервера')
-#     db.add_money(member, coins)
-#     await ctx.reply(f'{ctx.author.mention} выдал {member} {coins} <:skufcoin:1248834544233353227>')
+    if not db.is_user_exists(member.id):
+        return await ctx.reply('Пользователь не зарегистрирован!', ephemeral=True)
+    
+    db.add_money(member.id, coins)
+    await ctx.reply(f'Успешно выдано {coins} скуфкоинов пользователю {member.mention}')
 
 #РАБОТА
 async def work(ctx):
@@ -131,7 +340,7 @@ async def shop(ctx):
         view=view,
         ephemeral=True
     )
-
+    
 #БЛЕКДЖЕК
 async def bj(ctx, bet):
     if ctx.author.id in bjplayers and bjplayers[ctx.author.id].is_playing():

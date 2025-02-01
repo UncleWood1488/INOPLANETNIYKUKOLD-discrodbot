@@ -6,91 +6,103 @@ from discord.ext import commands
 from discord import app_commands
 from discord.ext.commands import Greedy
 from config import BOT_TOKEN, BOT_PREFIX
-from functions import log
+from functions import log, get_online_members, replace_mention, on_voice_state_update, handle_play_error
 from emoji import *
-from enum import member
 from random import choice
-from typing import Self
+# from music_cog import setup
+
 
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(levelname)s | %(message)s',
     handlers=[
-        logging.FileHandler('bot.log'),
+        logging.FileHandler('bot.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
 
-# variables bl0ck
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=BOT_PREFIX, intents=intents)
 bot.remove_command('help')
 
+# async def main():
+#     await setup(bot)
+
 # when connected bl0ck
 @bot.event
 async def on_ready():    
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="на тебя!"))
+    await bot.change_presence(activity=discord.Activity(
+        type=discord.ActivityType.watching, 
+        name="на тебя!"
+    ))
 
-    print('{0:#^60}'.format(''))
-    print('{0:*^60}'.format(f'Logged in as: {bot.user.name}'))
-    print('{0:*^60}'.format(bot.user.id))
-
-    print('{0:#^60}'.format('USER STATS:'))
-    print('{0:*^60}'.format('all users: {0}'.format(len(bot.users))))
-    print('{0:*^60}'.format('online: {0}'.format(len(functions.get_online_members(bot)))))
-    print('{0:#^60}'.format('online moderators:'))
-
-    print('{0:#^60}'.format('SYNCING SLASH COMMANDS:'))
-    # await bot.tree.sync() # sync local, use to clean
+    logging.info('{0:#^60}'.format(''))
+    logging.info('{0:*^60}'.format(f'Logged in as: {bot.user.name}'))
+    logging.info('{0:*^60}'.format(f'Bot ID: {bot.user.id}'))
+    logging.info('{0:#^60}'.format('USER STATS:'))
+    logging.info('{0:*^60}'.format(f'All users: {len(bot.users)}'))
+    logging.info('{0:*^60}'.format(f'Online: {len(get_online_members(bot))}'))
+    
+    logging.info('{0:#^60}'.format('SYNCING SLASH COMMANDS:'))
     for guild in bot.guilds:
         bot.tree.clear_commands(guild=guild)
         bot.tree.copy_global_to(guild=guild)
         synced = await bot.tree.sync(guild=guild)
-        print('{0:*^60}'.format(f"{guild}: {[i.name for i in synced]}")) # print name of commands on every guild
-    print('{0:*^60}'.format('Done!'))
-    print('{0:#^60}'.format(''))
+        logging.info('{0:*^60}'.format(f"{guild}: {[i.name for i in synced]}"))
+    logging.info('{0:*^60}'.format('Done!'))
 
 @bot.event
 async def on_guild_join(guild):
-    bot.tree.copy_global_to(guild)
-    await bot.tree.sync(guild)
+    bot.tree.copy_global_to(guild=guild)
+    await bot.tree.sync(guild=guild)
+
     
 
 # on_message bl0ck
 @bot.event
 async def on_message(message):
-    log(f'{message.guild} - #{message.channel} - @{message.author}: "{functions.replace_mention(message)}"', type='message')
-    return await bot.process_commands(message)
+    log(f'{message.guild} - #{message.channel} - @{message.author}: "{replace_mention(message)}"', type='message')
+    await bot.process_commands(message)
 
 @bot.event
 async def on_error(event, *args, **kwargs):
-    msg = traceback.format_exc()
-    log(f'task error: {event},\n{msg}', type='error')
-    await bot.get_user(303817809253629952).send(f"```py\n{msg}```")
+    error_msg = traceback.format_exc()
+    log(f'Task error: {event},\n{error_msg}', type='error')
+    await bot.get_user(303817809253629952).send(f"```py\n{error_msg}```")
 
 @bot.event
-async def on_command_error(ctx, err):
-    await ctx.reply(f"```bash\nError: {err}```")
-    msg = "".join(traceback.format_exception(err))
-    log(f'command error: {ctx.message},\n{msg}', type='error')
-    await bot.get_user(303817809253629952).send(f"```py\n{msg}```")
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        return
+    try:
+        await ctx.send(f"❌ Ошибка: {str(error)}", ephemeral=True)
+    except discord.errors.NotFound:
+        pass
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    # Автоотключение при пустом канале
+    voice_client = member.guild.voice_client
+    if voice_client and len(voice_client.channel.members) == 1:
+        await voice_client.disconnect()
+        guild_id = member.guild.id
+        if guild_id in functions.music_players:  # Исправленная строка
+            del functions.music_players[guild_id]
+            await voice_client.channel.send("🔌 Бот отключен из-за отсутствия участников")
 
 @bot.hybrid_command(name='check', guild_ids=[537267521565229056])
 async def check(ctx):
-    '''Имена всех, кто онлайн'''
-    log(f'check by {ctx.author}', type='debug')
-    await ctx.reply(f'```bash\n{functions.get_online_members(bot)}```', ephemeral=True)
+    """Показать онлайн пользователей"""
+    log(f'Check by {ctx.author}', type='debug')
+    await ctx.reply(f'```bash\n{get_online_members(bot)}```', ephemeral=True)
 
 # randomizing winner of roulette
-@bot.hybrid_command(name='roulette')
 @app_commands.describe(members='Участники')
 async def _roulette(ctx, members: Greedy[discord.Member]):
-    '''Выбирает случайного победителя'''
-    log(f'roulette by {ctx.author}: {members}', type='debug')
-    if not len(members):
-        return await ctx.reply("Передан пустой список")
-
+    """Рандомный выбор победителя"""
+    if not members:
+        return await ctx.reply("Список участников пуст")
     winner = choice(members)
     await ctx.reply(f'{winner.mention} Победил!')
 
@@ -165,10 +177,30 @@ async def _addmoney(ctx):
     log(f'{ctx.author} /addmoney', type='debug')
     await functions.addmoney(ctx)
 
-# @bot.hybrid_command(name='play')
-# async def play(self, ctx, args):
-#     '''Воспроизвести аудиофайл'''
-#     await MusicCog.play(self, ctx, args)
+@bot.hybrid_command(name="play")
+async def play_command(ctx, query: str):
+    await functions.play_music(ctx, query)
+
+@bot.hybrid_command(name="skip")
+async def skip_command(ctx):
+    await functions.skip_music(ctx)
+
+@bot.hybrid_command(name="pause")
+async def pause_command(ctx):
+    await functions.pause_music(ctx)
+
+@bot.hybrid_command(name="resume")
+async def resume_command(ctx):
+    await functions.resume_music(ctx)
+
+@bot.hybrid_command(name="stop")
+async def stop_command(ctx):
+    await functions.stop_music(ctx)
+
+@bot.hybrid_command(name="queue")
+async def queue_command(ctx):
+    await functions.show_queue(ctx)
+
 
 @bot.hybrid_command(name='svogamehelp')
 async def _svogamehelp(ctx):
