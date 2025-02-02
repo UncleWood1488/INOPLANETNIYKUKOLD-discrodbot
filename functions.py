@@ -94,7 +94,9 @@ async def move(ctx, members):
 async def help(ctx):
     emb = discord.Embed(title= 'Помощь', colour = discord.Color.light_gray(), )
     emb.set_author(name = ctx.bot.application.name, icon_url = ctx.bot.application.icon)
-    emb.add_field(name = '🍉Список команд', value = '/check - список людей на сервере онлайн\n /roullete - рулетка с игроком\n /work - работа\n /bj - блекджек\n /move - переместить кого либо\n /balance - проверить баланс\nВОСПРОИЗВЕДЕНИЕ МУЗЫКИ\n/play - играть музыку\n/skip - пропустить\n/pause - поставить на паузу\n/resume - продолжить\n/stop - остановить\n/queue - очередь\n ❗__НЕ РАБОЧИЕ КОМАНДЫ__❗\n ~~/fishing (рыбалка)~~\n ~~/svogamehelp (помощь по игре сво)~~\n ~~/musichelp (помощь по музыке)~~ \n ~~/shop (магазин)~~')
+    emb.add_field(name = '🍉 __Список команд__', value = '```/check``` - список людей на сервере онлайн\n ```/roullete``` - рулетка с игроком\n ```/work``` - работа\n ```/move``` - переместить кого либо\n ```/balance``` - проверить баланс\n ```/fishing``` - рыбалка\n ```/shop``` - магазин\n ```/svogamehelp``` - помощь по миниигре СВО')
+    emb.add_field(name = '🎵 ____ВОСПРОИЗВЕДЕНИЕ МУЗЫКИ____', value = '```/play``` - играть музыку\n```/pause``` - поставить на паузу\n```/resume``` - продолжить\n```/stop``` - остановить\n```/queue``` - очередь')
+    emb.add_field(name = '❗__НЕ РАБОЧИЕ КОМАНДЫ__❗', value = '~~/svogameprofile - профиль сво~~\n ~~/durak - дурак~~\n ~~/bj - блекджек~~\n ~~/skip - пропустить~~')
     await ctx.reply(embed=emb, ephemeral=True)
 
 # #МУЗЫКАЛЬНЫЙ ПЛЕЕР
@@ -116,7 +118,6 @@ def get_music_player(guild_id):
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }],
-            # Добавьте это:
             'extract_flat': True,
             'force-ipv4': True,
             'cachedir': False,     # Отключить кэширование
@@ -173,9 +174,13 @@ async def yt_query(query):
                 best_audio = audio_formats[0]
 
             return {
-                'source': best_audio['url'],
-                'title': info['title'],
-                'url': info['webpage_url']
+
+            'source': best_audio['url'],
+            'title': info['title'],
+            'url': info['webpage_url'],
+            'duration': info.get('duration', 0),
+            'author': info.get('uploader', 'Неизвестный автор'),
+            'thumbnail': info.get('thumbnail', '')
             }
         info = await loop.run_in_executor(None, partial(ydl.extract_info, query, download=False))
     except Exception as e:
@@ -185,12 +190,14 @@ async def yt_query(query):
 async def play_next(ctx):
     try:
         player = get_music_player(ctx.guild.id)
-        
-        # Захват блокировки только для работы с очередью
+        voice = ctx.voice_client
+        # Двойная проверка очереди
         async with player['lock']:
             if not player['queue']:
-                logger.info("[NEXT] Очередь пуста")
+                if voice and voice.is_connected():
+                    await voice.disconnect()
                 return
+                
             current = player['queue'].pop(0)
 
         # Остальные операции вне блокировки
@@ -209,14 +216,14 @@ async def play_next(ctx):
             after=after_playback
         )
 
-        await ctx.channel.send(embed=now_playing_embed(current['title'], current['url']))
+        await ctx.channel.send(embed=now_playing_embed(current['title'], current['url'], current['duration'], current['author'], current['thumbnail']))
 
     except Exception as e:
         logger.error(f"[NEXT] Ошибка: {str(e)}", exc_info=True)
         await ctx.channel.send(embed=error_embed(f"Ошибка: {str(e)}"))
 
 async def play_music(ctx, query):
-    await ctx.send("Идет поиск трека...", ephemeral=True)
+    await ctx.send("<a:spinner:1335435057632120983>Идет поиск трека...", ephemeral=True)
     try:
         logger.info(f"[PLAY] Запрос от {ctx.author}: {query}")
         player = get_music_player(ctx.guild.id)
@@ -242,6 +249,7 @@ async def play_music(ctx, query):
         # Добавление трека в очередь
         logger.info(f"[PLAY] Поиск трека: {query}")
         track = await yt_query(query)
+        track['added_by'] = ctx.author.id  # Добавляем ID пользователя
         player = get_music_player(ctx.guild.id)
         async with player['lock']:  # Захват блокировки
             player['queue'].append(track)
@@ -262,35 +270,97 @@ async def play_music(ctx, query):
         await ctx.send(embed=error_embed(f"Неизвестная ошибка: {str(e)}"))
 
 async def skip_music(ctx):
-    voice = ctx.voice_client
-    if not voice or not voice.is_connected():
-        return await ctx.send("Бот не подключен к голосовому каналу")
-    
-    if voice.is_playing():
-        voice.stop()
+    try:
+        voice = ctx.voice_client
+        if not voice or not voice.is_connected():
+            return await ctx.send(embed=error_embed("Бот не подключен к голосовому каналу"))
+        
         player = get_music_player(ctx.guild.id)
-        async with player['lock']:  # Захват блокировки
-            if player['queue']:
-                await play_next(ctx)
-        await ctx.send("Трек пропущен")
-    else:
-        await ctx.send("Нет активного воспроизведения")
+        
+        # Останавливаем воспроизведение, даже если трек на паузе
+        if voice.is_playing() or voice.is_paused():
+            voice.stop()
+            
+            async with player['lock']:
+                if player['queue']:
+                    # Запускаем следующий трек с задержкой для синхронизации
+                    await asyncio.sleep(0.5)
+                    await play_next(ctx)
+                    await ctx.send(embed=discord.Embed(
+                        description="⏭ Трек пропущен",
+                        color=discord.Color.green()
+                    ))
+                else:
+                    await ctx.send(embed=discord.Embed(
+                        description="🎶 Очередь пуста, воспроизведение остановлено",
+                        color=discord.Color.blue()
+                    ))
+                    await voice.disconnect()
+                    del music_players[ctx.guild.id]
+        else:
+            await ctx.send(embed=error_embed("Нет активного воспроизведения"))
+
+    except Exception as e:
+        logger.error(f"[SKIP] Critical error: {str(e)}", exc_info=True)
+        await ctx.send(embed=error_embed(f"Ошибка: {str(e)}"))
 
 async def pause_music(ctx):
-    player = get_music_player(ctx.guild.id)
-    voice = ctx.voice_client
-    if voice and voice.is_playing():
-        voice.pause()
-        player['paused'] = True
-        await ctx.send("Воспроизведение приостановлено")
+    try:
+        voice = ctx.voice_client
+        player = get_music_player(ctx.guild.id)
+        
+        # Проверка подключения бота
+        if not voice or not voice.is_connected():
+            return await ctx.send(embed=error_embed("🔇 Бот не подключен к голосовому каналу"))
+            
+        # Проверка текущего состояния
+        if voice.is_playing():
+            voice.pause()
+            player['paused'] = True
+            await ctx.send(embed=discord.Embed(
+                title="⏸ Пауза",
+                description="Воспроизведение приостановлено",
+                color=discord.Color.orange()
+            ).set_footer(text="Используйте /resume для продолжения"))
+            
+        elif voice.is_paused():
+            await ctx.send(embed=error_embed("⚠️ Воспроизведение уже на паузе!"))
+            
+        else:
+            await ctx.send(embed=error_embed("❌ Нет активного воспроизведения"))
+
+    except Exception as e:
+        logger.error(f"[PAUSE] Critical error: {str(e)}", exc_info=True)
+        await ctx.send(embed=error_embed(f"🚨 Ошибка: {str(e)}"))
 
 async def resume_music(ctx):
-    player = get_music_player(ctx.guild.id)
-    voice = ctx.voice_client
-    if voice and voice.is_paused():
-        voice.resume()
-        player['paused'] = False
-        await ctx.send("Воспроизведение возобновлено")
+    try:
+        voice = ctx.voice_client
+        player = get_music_player(ctx.guild.id)
+        
+        # Проверка подключения бота
+        if not voice or not voice.is_connected():
+            return await ctx.send(embed=error_embed("🔇 Бот не подключен к голосовому каналу"))
+            
+        # Проверка текущего состояния
+        if voice.is_paused():
+            voice.resume()
+            player['paused'] = False
+            await ctx.send(embed=discord.Embed(
+                title="▶ Возобновлено",
+                description="Воспроизведение продолжается",
+                color=discord.Color.green()
+            ))
+            
+        elif voice.is_playing():
+            await ctx.send(embed=error_embed("⚠️ Воспроизведение уже активно!"))
+            
+        else:
+            await ctx.send(embed=error_embed("❌ Нет трека на паузе"))
+
+    except Exception as e:
+        logger.error(f"[RESUME] Critical error: {str(e)}", exc_info=True)
+        await ctx.send(embed=error_embed(f"🚨 Ошибка: {str(e)}"))
 
 async def stop_music(ctx):
     player = get_music_player(ctx.guild.id)
@@ -306,12 +376,7 @@ async def stop_music(ctx):
 
 async def show_queue(ctx):
     player = get_music_player(ctx.guild.id)
-    if not player['queue']:
-        await ctx.send("Очередь пуста")
-        return
-    
-    queue_list = "\n".join([f"{i+1}. {item['title']}" for i, item in enumerate(player['queue'])])
-    await ctx.send(f"**Очередь воспроизведения:**\n{queue_list}")
+    await ctx.send(embed=queue_embed(player['queue']))
 
 # Обработчики ошибок
 async def on_voice_state_update(member, before, after):

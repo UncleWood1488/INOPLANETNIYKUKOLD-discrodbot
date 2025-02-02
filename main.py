@@ -9,7 +9,6 @@ from config import BOT_TOKEN, BOT_PREFIX
 from functions import log, get_online_members, replace_mention, on_voice_state_update, handle_play_error
 from emoji import *
 from random import choice
-# from music_cog import setup
 
 
 # Настройка логирования
@@ -25,9 +24,6 @@ logging.basicConfig(
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=BOT_PREFIX, intents=intents)
 bot.remove_command('help')
-
-# async def main():
-#     await setup(bot)
 
 # when connected bl0ck
 @bot.event
@@ -133,8 +129,6 @@ async def _bj_error(ctx, error):
     elif isinstance(error, discord.ext.commands.errors.MissingRequiredArgument):
         return await ctx.reply(f'{ctx.author.mention}, введите ставку nedocoins')
 
-
-
 # move people to voice channel
 @bot.hybrid_command(name='move')
 @app_commands.describe(members="Кого переместить")
@@ -183,26 +177,32 @@ async def _addmoney(ctx, member: discord.Member, coins: int):
 @bot.hybrid_command(name="play")
 @app_commands.describe(query="Ссылка или название трека")
 async def play_command(ctx, query: str):
+    '''Играть трек'''
     await functions.play_music(ctx, query)
 
 @bot.hybrid_command(name="skip")
 async def skip_command(ctx):
+    '''Пропустить трек'''
     await functions.skip_music(ctx)
 
 @bot.hybrid_command(name="pause")
 async def pause_command(ctx):
+    '''Поставить на паузу'''
     await functions.pause_music(ctx)
 
 @bot.hybrid_command(name="resume")
 async def resume_command(ctx):
+    '''Возобновить воспроизведение'''
     await functions.resume_music(ctx)
 
 @bot.hybrid_command(name="stop")
 async def stop_command(ctx):
+    '''Выключить воспроизведение'''
     await functions.stop_music(ctx)
 
 @bot.hybrid_command(name="queue")
 async def queue_command(ctx):
+    '''Списко треков'''
     await functions.show_queue(ctx)
 
 @bot.hybrid_command(name='svogamehelp')
@@ -219,12 +219,3 @@ async def _svogameprofile(ctx):
 
 if __name__ == '__main__':
     bot.run(BOT_TOKEN)
-
-# enjoying in game war
-#@bot.gybrid_command(name='enjoygw')
-#@app_commands.describe(members="Вы теперь призывник, выберите свою сторону.")
-#async def _enjoygw(ctx):
-#    log(f'enjoygw {ctx.set}'')
-#        if #жмет на одну кнопку
-#        else message.
-#    await functions.enjoy(members)
