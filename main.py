@@ -67,6 +67,9 @@ async def on_message(message):
 
 @bot.event
 async def on_error(event, *args, **kwargs):
+    user = bot.get_user(303817809253629952)
+    if user:
+        await user.send(f"```py\n{error_msg}```")
     error_msg = traceback.format_exc()
     log(f'Task error: {event},\n{error_msg}', type='error')
     await bot.get_user(303817809253629952).send(f"```py\n{error_msg}```")
@@ -98,13 +101,14 @@ async def check(ctx):
     await ctx.reply(f'```bash\n{get_online_members(bot)}```', ephemeral=True)
 
 # randomizing winner of roulette
+@bot.hybrid_command(name='roulette')
 @app_commands.describe(members='Участники')
 async def _roulette(ctx, members: Greedy[discord.Member]):
-    """Рандомный выбор победителя"""
     if not members:
-        return await ctx.reply("Список участников пуст")
+        await ctx.reply("Список участников пуст", ephemeral=True)
+        return
     winner = choice(members)
-    await ctx.reply(f'{winner.mention} Победил!')
+    await ctx.reply(f'{winner.mention} победил!')
 
 # work
 @bot.hybrid_command(name='work')
@@ -172,12 +176,12 @@ async def _help(ctx):
     await functions.help(ctx)
 
 @bot.hybrid_command(name='addmoney')
-async def _addmoney(ctx):
-    '''Добавить денег'''
-    log(f'{ctx.author} /addmoney', type='debug')
-    await functions.addmoney(ctx)
+@app_commands.describe(member="Участник", coins="Количество скуфкоинов")
+async def _addmoney(ctx, member: discord.Member, coins: int):
+    await functions.addmoney(ctx, member, coins)
 
 @bot.hybrid_command(name="play")
+@app_commands.describe(query="Ссылка или название трека")
 async def play_command(ctx, query: str):
     await functions.play_music(ctx, query)
 
@@ -200,7 +204,6 @@ async def stop_command(ctx):
 @bot.hybrid_command(name="queue")
 async def queue_command(ctx):
     await functions.show_queue(ctx)
-
 
 @bot.hybrid_command(name='svogamehelp')
 async def _svogamehelp(ctx):

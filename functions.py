@@ -1,3 +1,4 @@
+import os
 import discord
 from discord.ext import commands
 import time
@@ -7,6 +8,7 @@ import logging
 from embedmusicplayer import *
 from embedshop import create_welcome_embed, create_main_embed
 from shop import ShopView
+from functools import partial
 # from snake import Snake
 from blackjack import blackjack
 from random import *
@@ -20,6 +22,22 @@ logger = logging.getLogger(__name__)
 bjplayers = {}
 snakeplayers = {}
 music_players = {}
+
+# Укажите полный путь к ffmpeg
+FFMPEG_PATH = "./ffmpeg/bin/ffmpeg.exe"  # Для Windows
+# FFMPEG_PATH = "/usr/bin/ffmpeg"           # Для Linux/macOS
+
+# Проверка существования файла
+if not os.path.exists(FFMPEG_PATH):
+    logger.error(f"[FATAL] FFmpeg не найден по пути: {os.path.abspath(FFMPEG_PATH)}")
+    raise RuntimeError("FFmpeg не установлен")
+else:
+    logger.info(f"[INIT] FFmpeg найден: {os.path.abspath(FFMPEG_PATH)}")
+
+FFmpegPCMAudio.executable = FFMPEG_PATH
+
+# Для Linux/macOS
+# FFmpegPCMAudio.executable = "/usr/bin/ffmpeg"
 
 
 def get_online_members(bot):
@@ -76,7 +94,7 @@ async def move(ctx, members):
 async def help(ctx):
     emb = discord.Embed(title= 'Помощь', colour = discord.Color.light_gray(), )
     emb.set_author(name = ctx.bot.application.name, icon_url = ctx.bot.application.icon)
-    emb.add_field(name = '🍉Список команд', value = '/check - список людей на сервере онлайн\n /roullete - рулетка с игроком\n /work - работа\n /bj - блекджек\n /move - переместить кого либо\n /balance - проверить баланс\n ❗__НЕ РАБОЧИЕ КОМАНДЫ__❗\n ~~/fishing (рыбалка)~~\n ~~/svogamehelp (помощь по игре сво)~~\n ~~/musichelp (помощь по музыке)~~ \n ~~/shop (магазин)~~')
+    emb.add_field(name = '🍉Список команд', value = '/check - список людей на сервере онлайн\n /roullete - рулетка с игроком\n /work - работа\n /bj - блекджек\n /move - переместить кого либо\n /balance - проверить баланс\nВОСПРОИЗВЕДЕНИЕ МУЗЫКИ\n/play - играть музыку\n/skip - пропустить\n/pause - поставить на паузу\n/resume - продолжить\n/stop - остановить\n/queue - очередь\n ❗__НЕ РАБОЧИЕ КОМАНДЫ__❗\n ~~/fishing (рыбалка)~~\n ~~/svogamehelp (помощь по игре сво)~~\n ~~/musichelp (помощь по музыке)~~ \n ~~/shop (магазин)~~')
     await ctx.reply(embed=emb, ephemeral=True)
 
 # #МУЗЫКАЛЬНЫЙ ПЛЕЕР
@@ -84,104 +102,121 @@ def get_music_player(guild_id):
     if guild_id not in music_players:
         music_players[guild_id] = {
             'queue': [],
+            'lock': asyncio.Lock(),
             'in_voice': False,
             'voice_channel': None,
             'chat_channel': None,
             'paused': False,
             'yt_options': {
-                # YouTubeDL параметры
-                'default_search': 'auto',
-                'format': 'bestaudio/best',
-                'noplaylist': True,
-                'ignoreerrors': False,
-                'quiet': False,
-                'no_warnings': False,
-                'geo_bypass': True,
-                'age_limit': 0,
-                'force-ipv4': True,
-                'verbose': True,
-                'cookiefile': 'cookies.txt',
-                'headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept-Language': 'en-US,en;q=0.9',
+            'format': 'bestaudio/best',
+            'ignoreerrors': True,  # Пропускать ошибки
+            'quiet': True,         # Убрать лишние логи
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            # Добавьте это:
+            'extract_flat': True,
+            'force-ipv4': True,
+            'cachedir': False,     # Отключить кэширование
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://www.youtube.com/'
                 },
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
                 }],
-                'extractor_retries': 3,
-                'socket_timeout': 10
             },
             'ffmpeg_options': {
-                # FFmpeg параметры
-                'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -nostdin',
-                'options': '-vn -acodec libmp3lame'
+            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -nostdin',
+            'options': '-vn -sn -dn -b:a 192k -af loudnorm=I=-16:LRA=11:TP=-1.5'
             }
         }
     return music_players[guild_id]
 
 async def yt_query(query):
+    loop = asyncio.get_event_loop()
     try:
-        ydl_opts = get_music_player(0)['yt_options']
-        with YoutubeDL(ydl_opts) as yt:
-            logger.debug(f"[YT] Запрос: {query}")
-            
-            # Скачать и обработать данные
-            info = yt.extract_info(query, download=False)
-            
-            # Если видео приватное или требует авторизации
-            if info.get('is_unavailable'):
-                raise DownloadError("Видео недоступно (приватное или удалено)")
-                
-            if 'entries' in info:
-                track_info = info['entries'][0]
-            else:
-                track_info = info
-                
-            if not track_info.get('formats'):
-                raise DownloadError("Нет аудиоформатов")
-                
-        return {
-            'source': track_info['formats'][0]['url'],
-            'title': track_info['title'],
-            'url': track_info['webpage_url']
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9'
+            }
         }
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(query, download=False)
+            if 'entries' in info:
+                info = info['entries'][0]
+
+            # Фильтруем только аудиоформаты с ключом 'acodec'
+            audio_formats = [
+                f for f in info['formats'] 
+                if f.get('acodec') != 'none' and 'acodec' in f
+            ]
+
+            # Если нет подходящих форматов, вызываем ошибку
+            if not audio_formats:
+                raise DownloadError("Нет доступных аудиоформатов")
+
+            # Ищем OPUS или выбираем первый аудиоформат
+            best_audio = None
+            for f in audio_formats:
+                if 'opus' in f['acodec']:
+                    best_audio = f
+                    break
+            if not best_audio:
+                best_audio = audio_formats[0]
+
+            return {
+                'source': best_audio['url'],
+                'title': info['title'],
+                'url': info['webpage_url']
+            }
+        info = await loop.run_in_executor(None, partial(ydl.extract_info, query, download=False))
     except Exception as e:
-        logger.error(f"[YT] Ошибка: {str(e)}", exc_info=True)
-        raise DownloadError(f"Ошибка YouTube: {str(e)}")
+        logger.error(f"[YT] Ошибка: {str(e)}")
+        raise
     
 async def play_next(ctx):
     try:
         player = get_music_player(ctx.guild.id)
-        logger.debug(f"[NEXT] Очередь до извлечения: {len(player['queue'])} треков")
         
-        if not player['queue']:
-            logger.info("[NEXT] Очередь пуста")
-            return
-        
+        # Захват блокировки только для работы с очередью
+        async with player['lock']:
+            if not player['queue']:
+                logger.info("[NEXT] Очередь пуста")
+                return
+            current = player['queue'].pop(0)
+
+        # Остальные операции вне блокировки
         voice = ctx.voice_client
         if not voice or not voice.is_connected():
             logger.warning("[NEXT] Бот не подключен к голосовому каналу")
             return
 
-        current = player['queue'].pop(0)
-        logger.info(f"[NEXT] Воспроизведение трека: {current['title']}")
-        logger.debug(f"[NEXT] Очередь после извлечения: {len(player['queue'])} треков")
+        def after_playback(error):
+            if error:
+                logger.error(f"[FFMPEG] Ошибка: {error}")
+            asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop)
 
-        await asyncio.sleep(0.5)
         voice.play(
-            FFmpegPCMAudio(current['source'], **player['ffmpeg_options']),
-            after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop)
+            FFmpegPCMAudio(source=current['source'], executable=FFMPEG_PATH, **player['ffmpeg_options']),
+            after=after_playback
         )
-        logger.info("[NEXT] Воспроизведение запущено")
-        await ctx.send(embed=now_playing_embed(current['title'], current['url']))
+
+        await ctx.channel.send(embed=now_playing_embed(current['title'], current['url']))
 
     except Exception as e:
         logger.error(f"[NEXT] Ошибка: {str(e)}", exc_info=True)
-        await ctx.send(embed=error_embed(f"Ошибка: {str(e)}"))
+        await ctx.channel.send(embed=error_embed(f"Ошибка: {str(e)}"))
 
 async def play_music(ctx, query):
+    await ctx.send("Идет поиск трека...", ephemeral=True)
     try:
         logger.info(f"[PLAY] Запрос от {ctx.author}: {query}")
         player = get_music_player(ctx.guild.id)
@@ -200,7 +235,6 @@ async def play_music(ctx, query):
         if not voice_client or not voice_client.is_connected():
             logger.info(f"[PLAY] Подключение к каналу {ctx.author.voice.channel}")
             voice_client = await ctx.author.voice.channel.connect()
-            await asyncio.sleep(1)
         elif voice_client.channel != ctx.author.voice.channel:
             logger.info(f"[PLAY] Перемещение в канал {ctx.author.voice.channel}")
             await voice_client.move_to(ctx.author.voice.channel)
@@ -208,7 +242,9 @@ async def play_music(ctx, query):
         # Добавление трека в очередь
         logger.info(f"[PLAY] Поиск трека: {query}")
         track = await yt_query(query)
-        player['queue'].append(track)
+        player = get_music_player(ctx.guild.id)
+        async with player['lock']:  # Захват блокировки
+            player['queue'].append(track)
         logger.debug(f"[PLAY] Очередь после добавления: {len(player['queue'])} треков")
 
         if not ctx.voice_client.is_playing():
@@ -232,8 +268,11 @@ async def skip_music(ctx):
     
     if voice.is_playing():
         voice.stop()
+        player = get_music_player(ctx.guild.id)
+        async with player['lock']:  # Захват блокировки
+            if player['queue']:
+                await play_next(ctx)
         await ctx.send("Трек пропущен")
-        await play_next(ctx)
     else:
         await ctx.send("Нет активного воспроизведения")
 
@@ -255,11 +294,15 @@ async def resume_music(ctx):
 
 async def stop_music(ctx):
     player = get_music_player(ctx.guild.id)
-    voice = ctx.voice_client
-    if voice and voice.is_connected():
-        await voice.disconnect()
-        player.clear()
-        await ctx.send("Воспроизведение остановлено")
+    guild_id = ctx.guild.id
+    async with player['lock']:  # Захват блокировки
+        if guild_id in music_players:
+            del music_players[guild_id]
+        voice = ctx.voice_client
+        if voice and voice.is_connected():
+            await voice.disconnect()
+            player['queue'].clear()  # Очистка очереди
+            await ctx.send("Воспроизведение остановлено")
 
 async def show_queue(ctx):
     player = get_music_player(ctx.guild.id)

@@ -2,10 +2,10 @@ import discord
 
 def now_playing_embed(title, url):
     return discord.Embed(
-        title="🎵 Сейчас играет",
+        title="<1335406594200047708> Сейчас играет",
         description=f"[{title}]({url})",
         color=discord.Color.blurple()
-    ).set_footer(text="Используйте !help для списка команд")
+    ).set_footer(text="Используйте /help для списка команд")
 
 def queue_embed(queue):
     embed = discord.Embed(
