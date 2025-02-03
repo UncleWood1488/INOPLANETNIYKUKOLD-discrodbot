@@ -133,7 +133,7 @@ def get_music_player(guild_id):
                 }],
             },
             'ffmpeg_options': {
-            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -nostdin',
+            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -loglevel debug -nostdin',
             'options': '-vn -sn -dn -b:a 192k -af loudnorm=I=-16:LRA=11:TP=-1.5'
             }
         }
@@ -191,21 +191,18 @@ async def play_next(ctx):
     try:
         player = get_music_player(ctx.guild.id)
         voice = ctx.voice_client
-        # Двойная проверка очереди
         async with player['lock']:
             if not player['queue']:
                 if voice and voice.is_connected():
                     await voice.disconnect()
                 return
-                
             current = player['queue'].pop(0)
 
-        # Остальные операции вне блокировки
-        voice = ctx.voice_client
-        if not voice or not voice.is_connected():
-            logger.warning("[NEXT] Бот не подключен к голосовому каналу")
-            return
+        # Ждем, пока клиент освободится
+        while voice.is_playing() or voice.is_paused():
+            await asyncio.sleep(0.1)
 
+        # Запуск следующего трека
         def after_playback(error):
             if error:
                 logger.error(f"[FFMPEG] Ошибка: {error}")
@@ -215,7 +212,6 @@ async def play_next(ctx):
             FFmpegPCMAudio(source=current['source'], executable=FFMPEG_PATH, **player['ffmpeg_options']),
             after=after_playback
         )
-
         await ctx.channel.send(embed=now_playing_embed(current['title'], current['url'], current['duration'], current['author'], current['thumbnail']))
 
     except Exception as e:
@@ -269,40 +265,42 @@ async def play_music(ctx, query):
         logger.critical(f"[PLAY] Критическая ошибка: {str(e)}", exc_info=True)
         await ctx.send(embed=error_embed(f"Неизвестная ошибка: {str(e)}"))
 
-async def skip_music(ctx):
+async def skip_music(interaction: discord.Interaction):
     try:
-        voice = ctx.voice_client
+        await interaction.response.defer()  # Подтверждение команды
+        voice = interaction.guild.voice_client
+
         if not voice or not voice.is_connected():
-            return await ctx.send(embed=error_embed("Бот не подключен к голосовому каналу"))
-        
-        player = get_music_player(ctx.guild.id)
-        
-        # Останавливаем воспроизведение, даже если трек на паузе
+            await interaction.followup.send(embed=error_embed("Бот не подключен к голосовому каналу"))
+            return
+
+        player = get_music_player(interaction.guild.id)
+
         if voice.is_playing() or voice.is_paused():
             voice.stop()
-            
+            await asyncio.sleep(1.5)
+
             async with player['lock']:
                 if player['queue']:
-                    # Запускаем следующий трек с задержкой для синхронизации
-                    await asyncio.sleep(0.5)
-                    await play_next(ctx)
-                    await ctx.send(embed=discord.Embed(
+                    await play_next(interaction)
+                    await interaction.followup.send(embed=discord.Embed(
                         description="⏭ Трек пропущен",
                         color=discord.Color.green()
                     ))
                 else:
-                    await ctx.send(embed=discord.Embed(
-                        description="🎶 Очередь пуста, воспроизведение остановлено",
+                    await interaction.followup.send(embed=discord.Embed(
+                        description="🎶 Очередь пуста!",
                         color=discord.Color.blue()
                     ))
+                    if interaction.guild.id in music_players:
+                        del music_players[interaction.guild.id]
                     await voice.disconnect()
-                    del music_players[ctx.guild.id]
         else:
-            await ctx.send(embed=error_embed("Нет активного воспроизведения"))
+            await interaction.followup.send(embed=error_embed("Нет активного трека"))
 
     except Exception as e:
-        logger.error(f"[SKIP] Critical error: {str(e)}", exc_info=True)
-        await ctx.send(embed=error_embed(f"Ошибка: {str(e)}"))
+        logger.error(f"[SKIP] Ошибка: {str(e)}", exc_info=True)
+        await interaction.followup.send(embed=error_embed("Внутренняя ошибка бота"))
 
 async def pause_music(ctx):
     try:

@@ -81,12 +81,14 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_voice_state_update(member, before, after):
-    # Автоотключение при пустом канале
     voice_client = member.guild.voice_client
     if voice_client and len(voice_client.channel.members) == 1:
-        await voice_client.disconnect()
         guild_id = member.guild.id
-        if guild_id in functions.music_players:  # Исправленная строка
+        if guild_id in functions.music_players:
+            # Очистка очереди и остановка
+            async with functions.music_players[guild_id]['lock']:
+                functions.music_players[guild_id]['queue'].clear()
+            await voice_client.disconnect()
             del functions.music_players[guild_id]
             await voice_client.channel.send("🔌 Бот отключен из-за отсутствия участников")
 
@@ -180,10 +182,9 @@ async def play_command(ctx, query: str):
     '''Играть трек'''
     await functions.play_music(ctx, query)
 
-@bot.hybrid_command(name="skip")
-async def skip_command(ctx):
-    '''Пропустить трек'''
-    await functions.skip_music(ctx)
+@bot.tree.command(name="skip", description="Пропустить текущий трек")
+async def skip_command(interaction: discord.Interaction):
+    await functions.skip_music(interaction)
 
 @bot.hybrid_command(name="pause")
 async def pause_command(ctx):
