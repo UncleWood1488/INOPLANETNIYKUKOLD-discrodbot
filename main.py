@@ -6,7 +6,7 @@ from discord.ext import commands
 from discord import app_commands
 from discord.ext.commands import Greedy
 from config import BOT_TOKEN, BOT_PREFIX
-from functions import log, get_online_members, replace_mention, on_voice_state_update, handle_play_error
+from functions import log, get_online_members, replace_mention
 from emoji import *
 from random import choice
 
@@ -117,11 +117,11 @@ async def _work(ctx):
 
 # BlackJack
 @bot.hybrid_command(name="bj")
-@app_commands.describe(bet='Ставка скуфкоины!')
+@app_commands.describe(bet='Ставка (целое число)')
 async def _bj(ctx, bet: int):
-    '''Блекджек'''
-    log(f'{ctx.author} /blackjack: {bet}', type='debug')
-    await functions.bj(ctx, bet)
+    if bet < 1:
+        await ctx.reply("Ставка должна быть больше 0!", ephemeral=True)
+        return
 
 @_bj.error
 async def _bj_error(ctx, error):
@@ -176,11 +176,10 @@ async def _help(ctx):
 async def _addmoney(ctx, member: discord.Member, coins: int):
     await functions.addmoney(ctx, member, coins)
 
-@bot.hybrid_command(name="play")
-@app_commands.describe(query="Ссылка или название трека")
-async def play_command(ctx, query: str):
-    '''Играть трек'''
-    await functions.play_music(ctx, query)
+@bot.tree.command(name="play", description="Воспроизвести трек")
+@app_commands.describe(query="Название или URL трека")
+async def play_command(interaction: discord.Interaction, query: str):
+    await functions.play_music(interaction, query)
 
 @bot.tree.command(name="skip", description="Пропустить текущий трек")
 async def skip_command(interaction: discord.Interaction):

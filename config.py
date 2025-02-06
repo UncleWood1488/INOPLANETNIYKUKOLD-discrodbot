@@ -2,11 +2,11 @@ import os
 from random import *
 BOT_TOKEN = os.environ.get('BOT_TOKEN') or "NjAzOTM4OTUzNzQ5NDYzMDUw.GGMGPi.jqEIV5-X2Wh3jm99wUaNLn6Zj6qEj6nufk0Pm8"
 BOT_PREFIX = os.environ.get('BOT_PREFIX') or '.'
-PROXY_SCHEMA = os.environ.get('PROXY_SCHEMA') or "http"
-PROXY_HOST = os.environ.get('PROXY_HOST') or "localhost"
-PROXY_PORT = os.environ.get('PROXY_PORT') or 3130
-PROXY_USER = os.environ.get('PROXY_USER') or ""
-PROXY_PASSWORD = os.environ.get('PROXY_PASSWORD') or ""
+# PROXY_SCHEMA = os.environ.get('PROXY_SCHEMA') or "http"
+# PROXY_HOST = os.environ.get('PROXY_HOST') or "localhost"
+# PROXY_PORT = os.environ.get('PROXY_PORT') or 3130
+# PROXY_USER = os.environ.get('PROXY_USER') or ""
+# PROXY_PASSWORD = os.environ.get('PROXY_PASSWORD') or ""
 
 # Настройки кулдаунов (в секундах)
 cooldown = {
@@ -40,5 +40,12 @@ fish = {
     'salmon': [0, 1, 2, 3],    # Лосось: можно поймать от 0 до 3 штук
     'tropical': [0, 1, 2, 3],  # Тропическая рыба: можно поймать от 0 до 3 штук
     'squid': [0, 1, 2, 3],     # Кальмар: можно поймать от 0 до 3 штук
+}
+
+fish_data = {
+    'cod': {'name': 'Треска', 'emoji': '<:Fish_Raw_Cod:1327154668463325216>'},
+    'salmon': {'name': 'Лосось', 'emoji': '<:Fish_Raw_Salmon:1327154686335385641>'},
+    'tropical': {'name': 'Тропическая рыба', 'emoji': '<:Fish_Tropical:1327154699383607317>'},
+    'squid': {'name': 'Кальмар', 'emoji': '<:Fish_Squid:1327427600888500326>'}
 }
 #game war-------

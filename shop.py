@@ -1,6 +1,10 @@
 import discord
+from db import sellfish, get_balance, get_fishing_stats
 from discord.ui import View, Button
+from config import fish_data
 from embedshop import create_category_embed, create_main_embed
+from threading import Lock
+sell_lock = Lock()
 
 
 class ShopView(View):
@@ -8,6 +12,12 @@ class ShopView(View):
         super().__init__(timeout=30)
         self.user = user
         self.current_page = 1
+
+    async def on_timeout(self):
+        # Disable buttons after timeout
+        for item in self.children:
+            item.disabled = True
+        await self.message.edit(view=self)
 
     @discord.ui.button(label="Рыбалка 🎣", style=discord.ButtonStyle.primary, row=0)
     async def fishing_category(self, interaction, button):
@@ -46,6 +56,37 @@ class ShopView(View):
                 ephemeral=True,
                 delete_after=10
             )
+    @discord.ui.button(label="Продать рыбу 💰", style=discord.ButtonStyle.secondary, row=2)
+    async def sell_fish_button(self, interaction):
+        await interaction.response.defer()
+        with sell_lock:
+            fish_stats = get_fishing_stats(self.user.id)
+        
+        # Проверяем, есть ли рыба
+        fish_stats = get_fishing_stats(self.user.id)
+        total_fish = sum(fish_stats.values())
+        
+        if total_fish == 0:
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="❌ Ошибка",
+                    description="У вас нет рыбы для продажи!",
+                    color=discord.Color.red()
+                ),
+                ephemeral=True
+            )
+            return
+        
+        # Продажа рыбы
+        sellfish(self.user.id)
+        balance = get_balance(self.user.id)
+        
+        # Обновляем сообщение
+        embed = create_category_embed(self.user, self.current_page)
+        await interaction.followup.send(
+            embed=embed,
+            view=self
+        )
 
     async def update_embed(self, interaction):
         embed = create_category_embed(interaction.user, self.current_page)

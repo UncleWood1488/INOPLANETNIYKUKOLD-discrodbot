@@ -13,7 +13,7 @@ from functools import partial
 from blackjack import blackjack
 from random import *
 from emoji import *
-from config import pay, cooldown, multiplier, new_worker_balance, fish
+from config import pay, cooldown, multiplier, new_worker_balance, fish_data
 from discord import FFmpegPCMAudio
 from yt_dlp import YoutubeDL, DownloadError
 import asyncio
@@ -60,6 +60,15 @@ def log(message: str, *, type: str):
     '''
     date = time.strftime("%Y/%b/%d %H:%M:%S")
     print(f'[{type.upper()}] {date} {message}')
+
+def format_fish_stats(user_id: int) -> str:
+    """Форматирует статистику рыбы в строку для Embed."""
+    fish_stats = db.get_fishing_stats(user_id)
+    return "\n".join(
+        f"{fish_data[fish]['emoji']} {fish_data[fish]['name']}: {count}"
+        for fish, count in fish_stats.items()
+        if count > 0
+    ) or "Пусто"
     
 
 async def move(ctx, members):
@@ -187,10 +196,12 @@ async def yt_query(query):
         logger.error(f"[YT] Ошибка: {str(e)}")
         raise
     
-async def play_next(ctx):
+async def play_next(interaction: discord.Interaction):
     try:
-        player = get_music_player(ctx.guild.id)
-        voice = ctx.voice_client
+        guild = interaction.guild
+        player = get_music_player(guild.id)
+        voice = guild.voice_client
+
         async with player['lock']:
             if not player['queue']:
                 if voice and voice.is_connected():
@@ -198,87 +209,78 @@ async def play_next(ctx):
                 return
             current = player['queue'].pop(0)
 
-        # Ждем, пока клиент освободится
+        # Ждем освобождения голосового клиента
         while voice.is_playing() or voice.is_paused():
             await asyncio.sleep(0.1)
 
-        # Запуск следующего трека
         def after_playback(error):
             if error:
                 logger.error(f"[FFMPEG] Ошибка: {error}")
-            asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop)
+            asyncio.run_coroutine_threadsafe(play_next(interaction), interaction.client.loop)
 
         voice.play(
             FFmpegPCMAudio(source=current['source'], executable=FFMPEG_PATH, **player['ffmpeg_options']),
             after=after_playback
         )
-        await ctx.channel.send(embed=now_playing_embed(current['title'], current['url'], current['duration'], current['author'], current['thumbnail']))
+        await interaction.followup.send(
+            embed=now_playing_embed(current['title'], current['url'], current['duration'], current['author'], current['thumbnail'])
+        )
 
     except Exception as e:
-        logger.error(f"[NEXT] Ошибка: {str(e)}", exc_info=True)
-        await ctx.channel.send(embed=error_embed(f"Ошибка: {str(e)}"))
+        logger.error(f"Playback failed: {str(e)}")
+        await interaction.followup.send("❌ Ошибка воспроизведения. Пропускаю трек.")
+        await play_next(interaction)  # Retry
 
-async def play_music(ctx, query):
-    await ctx.send("<a:spinner:1335435057632120983>Идет поиск трека...", ephemeral=True)
+async def play_music(interaction: discord.Interaction, query: str):
+    await interaction.response.defer()
     try:
-        logger.info(f"[PLAY] Запрос от {ctx.author}: {query}")
-        player = get_music_player(ctx.guild.id)
-        logger.debug(f"[PLAY] Состояние плеера для гильдии {ctx.guild.id}: {player}")
+        guild = interaction.guild
+        user = interaction.user
+        voice_client = guild.voice_client
 
         # Проверка подключения пользователя к голосовому каналу
-        if not ctx.author.voice:
-            logger.warning(f"[PLAY] Пользователь {ctx.author} не в голосовом канале")
-            await ctx.send("Вы не в голосовом канале!")
+        if not user.voice:
+            await interaction.followup.send(embed=error_embed("Вы не в голосовом канале!"))
             return
-            
-        voice_client = ctx.voice_client
-        logger.debug(f"[PLAY] Текущий голосовой клиент: {voice_client}")
+
+        channel = user.voice.channel
 
         # Подключение/переподключение к каналу
         if not voice_client or not voice_client.is_connected():
-            logger.info(f"[PLAY] Подключение к каналу {ctx.author.voice.channel}")
-            voice_client = await ctx.author.voice.channel.connect()
-        elif voice_client.channel != ctx.author.voice.channel:
-            logger.info(f"[PLAY] Перемещение в канал {ctx.author.voice.channel}")
-            await voice_client.move_to(ctx.author.voice.channel)
+            voice_client = await channel.connect()
+        elif voice_client.channel != channel:
+            await voice_client.move_to(channel)
 
         # Добавление трека в очередь
-        logger.info(f"[PLAY] Поиск трека: {query}")
         track = await yt_query(query)
-        track['added_by'] = ctx.author.id  # Добавляем ID пользователя
-        player = get_music_player(ctx.guild.id)
-        async with player['lock']:  # Захват блокировки
+        track['added_by'] = user.id
+
+        player = get_music_player(guild.id)
+        async with player['lock']:
             player['queue'].append(track)
-        logger.debug(f"[PLAY] Очередь после добавления: {len(player['queue'])} треков")
 
-        if not ctx.voice_client.is_playing():
-            logger.info("[PLAY] Запуск воспроизведения")
-            await play_next(ctx)
+        if not voice_client.is_playing():
+            await play_next(interaction)
         else:
-            logger.info(f"[PLAY] Трек добавлен в очередь: {track['title']}")
-            await ctx.send(f"Добавлено в очередь: {track['title']}")
+            await interaction.followup.send(f"Добавлено в очередь: {track['title']}")
 
-    except DownloadError as e:
-        logger.error(f"[PLAY] Ошибка загрузки: {str(e)}", exc_info=True)
-        await ctx.send(embed=error_embed(str(e)))
     except Exception as e:
-        logger.critical(f"[PLAY] Критическая ошибка: {str(e)}", exc_info=True)
-        await ctx.send(embed=error_embed(f"Неизвестная ошибка: {str(e)}"))
+        await interaction.followup.send(embed=error_embed(f"❌ Ошибка: {str(e)}"))
 
 async def skip_music(interaction: discord.Interaction):
     try:
-        await interaction.response.defer()  # Подтверждение команды
+        await interaction.response.defer()
         voice = interaction.guild.voice_client
 
         if not voice or not voice.is_connected():
-            await interaction.followup.send(embed=error_embed("Бот не подключен к голосовому каналу"))
+            await interaction.followup.send(embed=error_embed("🔇 Бот не подключен"))
             return
 
         player = get_music_player(interaction.guild.id)
 
         if voice.is_playing() or voice.is_paused():
             voice.stop()
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(1.5)  # Ожидание завершения FFmpeg
 
             async with player['lock']:
                 if player['queue']:
@@ -300,7 +302,7 @@ async def skip_music(interaction: discord.Interaction):
 
     except Exception as e:
         logger.error(f"[SKIP] Ошибка: {str(e)}", exc_info=True)
-        await interaction.followup.send(embed=error_embed("Внутренняя ошибка бота"))
+        await interaction.followup.send(embed=error_embed("⚠️ Внутренняя ошибка"))
 
 async def pause_music(ctx):
     try:
@@ -482,14 +484,6 @@ async def fishing(ctx):
     # Ловля рыбы
     caught_fish = db.fishing(user_id)  # Возвращает тип рыбы
     
-    # Словарь для красивых названий
-    fish_data = {
-        'cod': {'name': 'Треска', 'emoji': '<:Fish_Raw_Cod:1327154668463325216>'},
-        'salmon': {'name': 'Лосось', 'emoji': '<:Fish_Raw_Salmon:1327154686335385641>'},
-        'tropical': {'name': 'Тропическая рыба', 'emoji': '<:Fish_Tropical:1327154699383607317>'},
-        'squid': {'name': 'Кальмар', 'emoji': '<:Fish_Squid:1327427600888500326>'}
-    }
-    
     # Установка кулдауна (передаем длительность, а не время)
     db.set_cooldown(user_id, 'fishing', cooldown['fishing'])
 
@@ -502,11 +496,7 @@ async def fishing(ctx):
     emb.set_author(name=ctx.author.display_name, icon_url=ctx.author.avatar.url)
     
     # Статистика рыбы
-    fish_stats = db.get_fishing_stats(user_id)
-    stats_text = "\n".join(
-        f"{fish_data[fish]['emoji']} {fish_data[fish]['name']}: {count}"
-        for fish, count in fish_stats.items()
-    )
+    stats_text = format_fish_stats(user_id)
     emb.add_field(name="Ваш улов", value=stats_text, inline=False)
 
     await ctx.reply(embed=emb, ephemeral=True)

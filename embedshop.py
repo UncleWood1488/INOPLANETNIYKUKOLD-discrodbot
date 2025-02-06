@@ -1,13 +1,7 @@
 import discord
+from config import fish_data
 from config import new_worker_balance
-from db import get_balance, get_fishing_stats
-
-fish_data = {
-    'cod': {'name': 'Треска', 'emoji': '<:Fish_Raw_Cod:1327154668463325216>'},
-    'salmon': {'name': 'Лосось', 'emoji': '<:Fish_Raw_Salmon:1327154686335385641>'},
-    'tropical': {'name': 'Тропическая рыба', 'emoji': '<:Fish_Tropical:1327154699383607317>'},
-    'squid': {'name': 'Кальмар', 'emoji': '<:Fish_Squid:1327427600888500326>'}
-}
+from db import get_balance, get_fishing_stats, format_fish_stats
 
 def create_welcome_embed(bot):
     return (
@@ -55,7 +49,7 @@ def create_category_embed(user, page):
     ]
     embed.add_field(
         name='🎣 Ваш улов',
-        value='\n'.join(fish_list) or "Пусто",
+        value=format_fish_stats(user.id) or "Пусто",
         inline=False
     )
     
