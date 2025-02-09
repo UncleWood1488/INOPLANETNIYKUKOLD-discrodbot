@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bounded Map Navigation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+            position: relative;
+            transition: background-color 0.3s;
+        }
+
+        .map-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            cursor: grab;
+            overflow: hidden;
+        }
+
+        .map-container.grabbing {
+            cursor: grabbing;
+        }
+
+        .map-grid {
+            display: grid;
+            grid-template-columns: repeat(20, 100px);
+            grid-template-rows: repeat(20, 100px);
+            position: absolute;
+            transform-origin: 0 0;
+            transition: transform 0.1s;
+            background-color: white;
+            border: 2px solid #333;
+        }
+
+        .grid-item {
+            width: 100px;
+            height: 100px;
+            border: 1px solid #ddd;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            user-select: none;
+        }
+
+        .grid-item:hover {
+            background-color: #e0e0ff;
+        }
+
+        .coordinates {
+            font-size: 1.2em;
+            color: #666;
+        }
+
+        .control-button {
+            position: absolute;
+            left: 20px;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s;
+        }
+
+        /* Позиционирование кнопок */
+        #themeButton { 
+            top: 20px;
+            background-color: #4CAF50;
+            color: white;
+        }
+        #resetButton { bottom: 20px; }
+        #button1 { bottom: 80px; }
+        #button2 { bottom: 140px; }
+        #button3 { bottom: 200px; }
+
+        /* Стили для тёмной темы */
+        body.dark {
+            background-color: #212121;
+        }
+        body.dark .control-button {
+            background-color: #f0f0f0;
+            color: #212121;
+        }
+    </style>
+</head>
+<body>
+    <div class="map-container" id="mapContainer">
+        <div class="map-grid" id="mapGrid"></div>
+    </div>
+    
+    <!-- Кнопки -->
+    <button class="control-button" id="themeButton">Тёмный фон</button>
+    <button class="control-button" id="resetButton">Центрирование</button>
+    <button class="control-button" id="button1">Заглушка1</button>
+    <button class="control-button" id="button2">Заглушка2</button>
+    <button class="control-button" id="button3">Заглушка3</button>
+
+    <script>
+        // Переключение темы
+        const themeButton = document.getElementById('themeButton');
+        themeButton.addEventListener('click', () => {
+            document.body.classList.toggle('dark');
+            themeButton.textContent = document.body.classList.contains('dark') 
+                ? 'Светлый фон' 
+                : 'Тёмный фон';
+        });
+
+        const mapContainer = document.getElementById('mapContainer');
+        const mapGrid = document.getElementById('mapGrid');
+        const resetButton = document.getElementById('resetButton');
+        const gridSize = 20;
+        
+        let scale = 1;
+        let posX = 0;
+        let posY = 0;
+        let isDragging = false;
+        let startX, startY;
+        
+        const minScale = 0.3;
+        const maxScale = 8;
+        const baseWidth = 100 * gridSize;
+        const baseHeight = 100 * gridSize;
+
+        // Инициализация сетки
+        function initGrid() {
+            mapGrid.innerHTML = '';
+            for (let row = 0; row < gridSize; row++) {
+                for (let col = 0; col < gridSize; col++) {
+                    const gridItem = document.createElement('div');
+                    gridItem.className = 'grid-item';
+                    gridItem.setAttribute('data-x', col);
+                    gridItem.setAttribute('data-y', row);
+                    
+                    const coords = document.createElement('div');
+                    coords.className = 'coordinates';
+                    coords.textContent = `${col},${row}`;
+                    gridItem.appendChild(coords);
+
+                    gridItem.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        alert(`Выбрана клетка: X=${col}, Y=${row}`);
+                    });
+
+                    mapGrid.appendChild(gridItem);
+                }
+            }
+        }
+
+        initGrid();
+        centerMap();
+
+        // Масштабирование колесиком
+        mapContainer.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            const rect = mapContainer.getBoundingClientRect();
+            
+            const mouseX = (e.clientX - rect.left - posX) / scale;
+            const mouseY = (e.clientY - rect.top - posY) / scale;
+
+            const newScale = Math.min(Math.max(scale * delta, minScale), maxScale);
+            scale = newScale;
+
+            posX = e.clientX - rect.left - mouseX * scale;
+            posY = e.clientY - rect.top - mouseY * scale;
+
+            applyBounds();
+            updateTransform();
+        });
+
+        // Перемещение карты
+        mapContainer.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            isDragging = true;
+            
+            startX = e.clientX - posX * scale;
+            startY = e.clientY - posY * scale;
+            
+            mapContainer.classList.add('grabbing');
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            posX = (e.clientX - startX) / scale;
+            posY = (e.clientY - startY) / scale;
+            
+            applyBounds();
+            updateTransform();
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            mapContainer.classList.remove('grabbing');
+        });
+
+        // Сброс
+        mapContainer.addEventListener('dblclick', centerMap);
+        resetButton.addEventListener('click', centerMap);
+
+        function updateTransform() {
+            mapGrid.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        }
+
+        function applyBounds() {
+            const scaledWidth = baseWidth * scale;
+            const scaledHeight = baseHeight * scale;
+            const containerWidth = mapContainer.clientWidth;
+            const containerHeight = mapContainer.clientHeight;
+
+            let minX = containerWidth - scaledWidth;
+            let maxX = 0;
+            let minY = containerHeight - scaledHeight;
+            let maxY = 0;
+
+            const padding = 0.5;
+            minX -= containerWidth * padding;
+            maxX += containerWidth * padding;
+            minY -= containerHeight * padding;
+            maxY += containerHeight * padding;
+
+            posX = Math.min(Math.max(posX, minX), maxX);
+            posY = Math.min(Math.max(posY, minY), maxY);
+        }
+
+        function centerMap() {
+            scale = 1;
+            posX = (mapContainer.clientWidth - baseWidth) / 2;
+            posY = (mapContainer.clientHeight - baseHeight) / 2;
+            applyBounds();
+            updateTransform();
+        }
+
+        window.addEventListener('resize', () => {
+            applyBounds();
+            updateTransform();
+        });
+    </script>
+</body>
+</html>
