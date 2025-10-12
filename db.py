@@ -51,22 +51,25 @@ def init_db():
             tropical INTEGER DEFAULT 0,
             squid INTEGER DEFAULT 0
         )""")
-#   cursor.execute("""
-#   CREATE TABLE IF NOT EXISTS svo (
-#    user_id BIGINT NOT NULL,
-#    lvl BIGINT NOT NULL,
-#    exp BIGINT NOT NULL,
-#    hp BIGINT NOT NULL,
-#    armor BIGINT NOT NULL,
-#    weapon BIGINT NOT NULL,
-#    grenade BIGINT NOT NULL,
-#    vechicle BIGINT NOT NULL,
-#    kills BIGINT NOT NULL,
-#    vehkills BIGINT NOT NULL,
-#    deaths BIGINT NOT NULL
-#     
-# )
-# """)
+
+        # Создание таблицы svo
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS svo (
+           user_id INTEGER PRIMARY KEY,
+           lvl INTEGER DEFAULT 1,
+           exp INTEGER DEFAULT 0,
+           hp INTEGER DEFAULT 100,
+           armor INTEGER DEFAULT 0,
+           weapon BIGINT NOT NULL,
+           grenade INTEGER DEFAULT 0,
+           vehicle BIGINT NOT NULL,
+           vehiclehp INTEGER DEFAULT 0,
+           kills INTEGER DEFAULT 0,
+           vehiclekills INTEGER DEFAULT 0,
+           deaths INTEGER DEFAULT 0
+    
+)
+""")
         conn.commit()  # Фиксация изменений
 
 @contextmanager
@@ -254,17 +257,27 @@ def get_fishing_stats(user_id: int) -> dict:
     return dict(result)
 
 #-----------------------------------------------------------------------------------ДЕНЬГИ
-def add_money(memberid, amount):
+def add_money(user_id: int, amount: int):
     if amount < 0:
         raise ValueError("Количество денег не может быть отрицательным.")
+    
     with get_connection() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE coins SET coins = coins + ? WHERE member = ?",
-            (amount, memberid)
+        cursor = conn.cursor()
+        
+        # Создаем запись в coins, если её нет
+        cursor.execute(
+            "INSERT OR IGNORE INTO coins (user_id, coins) VALUES (?, 0)",
+            (user_id,)
         )
+        
+        # Обновляем баланс
+        cursor.execute(
+            "UPDATE coins SET coins = coins + ? WHERE user_id = ?",
+            (amount, user_id)
+        )
+        
         conn.commit()
-    print(f"Добавлено {amount} монет пользователю {memberid}.")
+    print(f"[DEBUG] Добавлено {amount} монет пользователю {user_id}.")
 
 def transfer_money(sender_id: int, receiver_id: int, amount: int) -> None:
     with get_connection() as conn:
