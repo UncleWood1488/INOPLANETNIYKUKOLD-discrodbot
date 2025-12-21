@@ -9,117 +9,156 @@ class blackjack():
         self.bet = bet
         self.hand = []
         self.dealer_hand = []
-        self.dealer_msg_val = 0 # Сумма карт диллера, показывающаяся в сообщении
+        self.dealer_msg_val = 0  # Сумма карт дилера, показывающаяся в сообщении
         self.reason = ''
         db.updatemoney(self.author.id, -self.bet)
-        # claiming cards
+        
+        # Раздача карт
         [self._claim_card() for i in range(2)]
         [self._claim_card(dealer=True) for i in range(2)]
-        # setting up self.dealer_msg_val
+        
+        # Установка значения для показа дилера
         if type(self.dealer_hand[0]) == int:
             self.dealer_msg_val = self.dealer_hand[0]
         elif self.dealer_hand[0] == 'A':
             self.dealer_msg_val = 11
         else:
             self.dealer_msg_val = 10
-        # check first turn win
-        if self._validate_sum() == 21 != self._validate_sum(dealer=True):
-            self.reason = 'ftw' # first turn win
-            pay = math.ceil(self.bet * 2.5) # 1.5 bet multiplier
-            return db.updatemoney(self.author.id, pay)
+            
+        # Проверка победы на первом ходу (Blackjack)
+        player_sum = self._validate_sum()
+        dealer_sum = self._validate_sum(dealer=True)
+        
+        if player_sum == 21 and dealer_sum != 21:
+            self.reason = 'ftw'  # first turn win
+            pay = math.ceil(self.bet * 2.5)  # 2.5x ставка (1.5x выигрыш + возврат ставки)
+            db.updatemoney(self.author.id, pay)
+        elif player_sum == 21 and dealer_sum == 21:
+            self.reason = 'tie'  # ничья на первом ходу
+            db.updatemoney(self.author.id, self.bet)  # возврат ставки
 
     def _claim_card(self, *, dealer: bool=False):
         cards = ('A', 'K', 'Q', 'J', 10, 9, 8, 7, 6, 5, 4, 3, 2)
         card = random.choice(cards)
         if dealer:
-            functions.log(f'Blackjack {self.author} Dealer {card}', type='debug') # ---
+            functions.log(f'Blackjack {self.author} Dealer {card}', type='debug')
             return self.dealer_hand.append(card)
         return self.hand.append(card)
 
     def _validate_sum(self, *, dealer: bool=False):
-        sum = 0
+        sum_val = 0
         hand = self.hand
         if dealer:
             hand = self.dealer_hand
 
+        # Сначала считаем все карты кроме тузов
         for card in hand:
             if type(card) == int:
-                sum += card; continue
-            if card in ['K', 'Q', 'J']:
-                sum += 10; continue
-        for i in range(hand.count('A')): # for each A
-            if sum + 11 > 21:
-                sum += 1; continue
-            sum += 11
-        return sum
+                sum_val += card
+            elif card in ['K', 'Q', 'J']:
+                sum_val += 10
+        
+        # Затем обрабатываем тузы
+        aces_count = hand.count('A')
+        for i in range(aces_count):
+            if sum_val + 11 <= 21:
+                sum_val += 11
+            else:
+                sum_val += 1
+                
+        return sum_val
 
     def is_playing(self):
-        if (self.reason == ''):
-            return True
-        return False
+        return self.reason == ''
 
     def prepare_message(self):
-        sum = self._validate_sum()
+        sum_val = self._validate_sum()
         mention = self.author.mention
+        
         if self.is_playing():
-            return f'```{self.author.name}, Твои карты: {self.hand}, сумма: {sum}\n\
-Карты диллера: [{self.dealer_hand[0]}, ?], сумма: {self.dealer_msg_val},```\
-{mention}, Взять ещё карту или достаточно?'
-        elif self.reason == 'ftw': # first turn win
-            return f'```{self.author.name}, Твои карты: {self.hand}, сумма: {sum}, \n\
-Карты диллера: [{self.dealer_hand}]`, сумма {self.dealer_msg_val}.```\
-{mention} выиграл {math.ceil(self.bet*1.5)} nedocoins!'
+            return (
+                f'```{self.author.name}, Твои карты: {self.hand}, сумма: {sum_val}\n'
+                f'Карты дилера: [{self.dealer_hand[0]}, ?], сумма: {self.dealer_msg_val}```\n'
+                f'{mention}, Взять ещё карту или достаточно?'
+            )
+        elif self.reason == 'ftw':  # first turn win
+            dealer_sum = self._validate_sum(dealer=True)
+            win_amount = math.ceil(self.bet * 1.5)  # Чистый выигрыш
+            return (
+                f'```{self.author.name}, Твои карты: {self.hand}, сумма: {sum_val}\n'
+                f'Карты дилера: {self.dealer_hand}, сумма: {dealer_sum}```\n'
+                f'{mention} выиграл {win_amount} скуфкоинов! 🎉'
+            )
         elif self.reason == 'lose':
-            return f'```{self.author.name}, Твои карты: {self.hand}, сумма: {sum}, \n\
-Карты диллера: [{self.dealer_hand}]`, сумма {self._validate_sum(dealer=True)},```\
-{mention}, Ты проиграл!`'
+            dealer_sum = self._validate_sum(dealer=True)
+            return (
+                f'```{self.author.name}, Твои карты: {self.hand}, сумма: {sum_val}\n'
+                f'Карты дилера: {self.dealer_hand}, сумма: {dealer_sum}```\n'
+                f'{mention}, Ты проиграл {self.bet} скуфкоинов! 💸'
+            )
         elif self.reason == 'win':
-            return f'```{self.author.name}, Твои карты: {self.hand}, сумма: {sum}, \n\
-Карты диллера: [{self.dealer_hand}]`, сумма {self._validate_sum(dealer=True)}.```\
-{mention} выиграл {self.bet} nedocoins!'
+            dealer_sum = self._validate_sum(dealer=True)
+            return (
+                f'```{self.author.name}, Твои карты: {self.hand}, сумма: {sum_val}\n'
+                f'Карты дилера: {self.dealer_hand}, сумма: {dealer_sum}```\n'
+                f'{mention} выиграл {self.bet} скуфкоинов! 🎉'
+            )
         elif self.reason == 'tie':
-            return f'```{self.author.name}, Твои карты: {self.hand}, сумма: {sum}, \n\
-Карты диллера: [{self.dealer_hand}]`, сумма {self._validate_sum(dealer=True)}.```\
-{mention}, Это ничья!'
+            dealer_sum = self._validate_sum(dealer=True)
+            return (
+                f'```{self.author.name}, Твои карты: {self.hand}, сумма: {sum_val}\n'
+                f'Карты дилера: {self.dealer_hand}, сумма: {dealer_sum}```\n'
+                f'{mention}, Это ничья! Ставка возвращена. 🤝'
+            )
 
     def hit(self):
+        """Игрок берет еще одну карту"""
+        if not self.is_playing():
+            return self.prepare_message()
+            
         self._claim_card()
-        if self._validate_sum() > 21:
+        player_sum = self._validate_sum()
+        
+        if player_sum > 21:
             self.reason = 'lose'
-        elif len(self.hand) >= 5:
+        elif player_sum == 21 or len(self.hand) >= 5:
+            # Если 21 или 5 карт - автоматически выигрыш
+            self._dealer_play()
+        elif len(self.hand) >= 5 and player_sum <= 21:
+            # 5 карт и не перебор - автоматический выигрыш
             self.reason = 'win'
+            db.updatemoney(self.author.id, self.bet * 2)
+            
         return self.prepare_message()
 
-    def stay(self): # !recursive function!
-        sum = self._validate_sum()
+    def _dealer_play(self):
+        """Логика игры дилера"""
         dealer_sum = self._validate_sum(dealer=True)
-
-        if not self.is_playing(): # protection
-            return self.prepare_message()
-        # overclaiming check
-        elif sum > 21:
-            self.reason = 'lose'
-            return self.prepare_message()
-        elif dealer_sum > 21:
+        player_sum = self._validate_sum()
+        
+        # Дилер добирает карты пока сумма меньше 17
+        while dealer_sum < 17 and len(self.dealer_hand) < 5:
+            self._claim_card(dealer=True)
+            dealer_sum = self._validate_sum(dealer=True)
+        
+        # Определение результата после хода дилера
+        if dealer_sum > 21:
             self.reason = 'win'
-            db.updatemoney(self.author.id, self.bet*2)
-            return self.prepare_message()
-        # 5-card hand check
-        elif len(self.hand) >= 5:
-            self.reason = 'win'
-            db.updatemoney(self.author.id, self.bet*2)
-            return self.prepare_message()
-        elif len(self.dealer_hand) >= 5:
-            self.reason = 'lose'
-            return self.prepare_message()
-
-        elif sum == dealer_sum > 17: #      tie check
+            db.updatemoney(self.author.id, self.bet * 2)
+        elif dealer_sum == player_sum:
             self.reason = 'tie'
             db.updatemoney(self.author.id, self.bet)
-            return self.prepare_message()
-        elif sum < dealer_sum: #            classic lose check
+        elif dealer_sum > player_sum:
             self.reason = 'lose'
-            return self.prepare_message()
         else:
-            self._claim_card(dealer=True) # game continues, dealer need more cards
-            return self.stay() #            recursive function
+            self.reason = 'win'
+            db.updatemoney(self.author.id, self.bet * 2)
+
+    def stay(self):
+        """Игрок останавливается"""
+        if not self.is_playing():
+            return self.prepare_message()
+            
+        # Запускаем логику дилера
+        self._dealer_play()
+        return self.prepare_message()

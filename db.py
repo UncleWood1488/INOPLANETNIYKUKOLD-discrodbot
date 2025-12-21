@@ -4,7 +4,7 @@ import time
 import random
 from datetime import datetime
 from contextlib import contextmanager
-from config import new_worker_balance, cooldown, new_fisher
+from config import new_worker_balance, cooldown, new_fisher, MAP_SETTINGS
 
 # Настройки пути к БД
 DATABASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database')
@@ -67,9 +67,18 @@ def init_db():
            kills INTEGER DEFAULT 0,
            vehiclekills INTEGER DEFAULT 0,
            deaths INTEGER DEFAULT 0
-    
-)
-""")
+        )
+        """)
+
+        # Создание таблицы map_positions
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS map_positions (
+            user_id INTEGER PRIMARY KEY,
+            x INTEGER DEFAULT 0,
+            y INTEGER DEFAULT 0,
+            last_updated TEXT DEFAULT CURRENT_TIMESTAMP
+        )""")
+        
         conn.commit()  # Фиксация изменений
 
 @contextmanager
@@ -115,6 +124,12 @@ def register_user(user_id):
             INSERT OR IGNORE INTO fish (user_id) 
             VALUES (?)
         """, (user_id,))
+
+        # Регистрация в map_positions
+        conn.execute("""
+            INSERT OR IGNORE INTO map_positions (user_id, x, y) 
+            VALUES (?, ?, ?)
+        """, (user_id, random.randint(0, MAP_SETTINGS['grid_size']-1), random.randint(0, MAP_SETTINGS['grid_size']-1)))
         
         conn.commit()
         
@@ -284,7 +299,7 @@ def transfer_money(sender_id: int, receiver_id: int, amount: int) -> None:
         try:
             conn.execute("BEGIN TRANSACTION")
             
-            # Проверка баланса
+            # Проверка баланс
             sender_balance = conn.execute(
                 "SELECT balance FROM users WHERE user_id = ?", 
                 (sender_id,)
@@ -309,6 +324,40 @@ def transfer_money(sender_id: int, receiver_id: int, amount: int) -> None:
         except Exception as e:
             conn.rollback()
             raise
+
+#-----------------------------------------------------------------------------------КАРТА
+def set_player_position(user_id: int, x: int, y: int):
+    """Установить позицию игрока на карте"""
+    if x < 0 or x >= MAP_SETTINGS['grid_size'] or y < 0 or y >= MAP_SETTINGS['grid_size']:
+        raise ValueError("Координаты за пределами карты")
+    
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO map_positions (user_id, x, y, last_updated)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        """, (user_id, x, y))
+        conn.commit()
+
+def get_player_position(user_id: int):
+    """Получить позицию игрока на карте"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT x, y FROM map_positions WHERE user_id = ?", (user_id,))
+        result = cursor.fetchone()
+        if result:
+            return result[0], result[1]
+        # Если позиции нет, устанавливаем случайную
+        x, y = random.randint(0, MAP_SETTINGS['grid_size']-1), random.randint(0, MAP_SETTINGS['grid_size']-1)
+        set_player_position(user_id, x, y)
+        return x, y
+
+def get_all_player_positions():
+    """Получить позиции всех игроков"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id, x, y FROM map_positions")
+        return {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
 
 # Добавьте в конец db.py для теста
 if __name__ == "__main__":

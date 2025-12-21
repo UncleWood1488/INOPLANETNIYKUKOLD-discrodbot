@@ -3,6 +3,7 @@ import traceback
 import logging
 import os
 import functions
+import musicplayer
 import requests
 import asyncio
 import subprocess
@@ -24,7 +25,7 @@ if os.path.exists("bot.log"):
     try:
         os.remove("bot.log")
     except Exception as e:
-        print(f"Ошибка при удалении bot.log: {e}")
+        print(f"Ошибка при удаления bot.log: {e}")
 
 # Обработчики
 file_handler = logging.FileHandler(filename="bot.log", encoding="utf-8", mode="w")
@@ -40,6 +41,23 @@ intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=BOT_PREFIX, intents=intents)
 bot.remove_command('help')
 
+# Setup the bot in modules
+functions.setup_bot(bot)
+musicplayer.setup_bot(bot)
+
+# Список разрешенных каналов для музыкальных команд
+ALLOWED_CHANNEL_IDS = [898603315372363797, 550857202139791362]  # Замените на реальные ID каналов
+
+async def check_music_channel(interaction: discord.Interaction) -> bool:
+    """Проверка разрешенного канала для музыкальных команд"""
+    if interaction.channel_id not in ALLOWED_CHANNEL_IDS:
+        await interaction.response.send_message(
+            "❌ Эта команда недоступна в данном канале!", 
+            ephemeral=True
+        )
+        return False
+    return True
+
 def update_yt_dlp():
     """Автоматическое обновление yt-dlp"""
     try:
@@ -49,17 +67,73 @@ def update_yt_dlp():
     except subprocess.CalledProcessError as e:
         logger.error(f"[UPDATE] Ошибка обновления yt-dlp: {e}")
         return False
-    
+
 def check_dependencies():
-    import pkg_resources
+    # --- ИСПРАВЛЕНИЕ: Замена pkg_resources ---
     try:
-        yt_dlp_version = pkg_resources.get_distribution("yt-dlp").version
+        # Используем importlib.metadata для получения версии пакета
+        from importlib.metadata import version, PackageNotFoundError
+        yt_dlp_version = version("yt-dlp")
         logger.info(f"[DEPS] yt-dlp version: {yt_dlp_version}")
+    except ImportError:
+        # На случай, если importlib.metadata недоступен (Python < 3.8 без backport)
+        logger.warning("[DEPS] Не удалось проверить версию yt-dlp: importlib.metadata недоступен")
+    except PackageNotFoundError:
+        logger.warning("[DEPS] yt-dlp не установлен")
     except Exception as e:
         logger.warning(f"[DEPS] Не удалось проверить версию yt-dlp: {e}")
 
+def check_youtube_access():
+    """Проверка доступности YouTube"""
+    import urllib.request
+    import socket
+    try:
+        socket.setdefaulttimeout(10)
+        # --- ИСПРАВЛЕНИЕ: Исправлена опечатка в URL ---
+        urllib.request.urlopen('https://www.youtube.com', timeout=10)
+        logger.info("[NETWORK] YouTube доступен")
+        return True
+    except Exception as e:
+        logger.error(f"[NETWORK] Нет доступа к YouTube: {e}")
+        return False
+
 @bot.event
 async def on_ready():    
+    # Проверка и обновление зависимостей
+    logger.info("Проверка зависимостей...")
+    check_dependencies()
+    update_yt_dlp()
+    
+    # Проверка сети
+    if not check_youtube_access():
+        logger.error("ВНИМАНИЕ: Нет доступа к YouTube. Музыкальные функции могут не работать.")
+    
+    # Проверка Opus
+    if not discord.opus.is_loaded():
+        try:
+            # --- ИСПРАВЛЕНИЕ: Уточнение пути к opus, если необходимо ---
+            # Если у вас есть конкретный файл opus.dll, укажите его путь
+            # discord.opus.load_opus('path/to/your/libopus-0.dll')
+            discord.opus.load_opus('opus') # Или 'libopus-0.dll' на Windows, если он не найден как 'opus'
+            logger.info("[INIT] Opus библиотека загружена")
+        except OSError as e:
+            logger.warning(f"[INIT] Не удалось загрузить Opus из 'opus': {e}")
+            # Попробуем стандартный способ
+            try:
+                # discord.py может попытаться найти opus автоматически
+                # Этот блок может быть избыточным, но оставлен для ясности
+                # Discord.py обычно сам ищет opus в системе
+                pass
+            except Exception as auto_load_e:
+                 logger.warning(f"[INIT] Автоматическая загрузка Opus не удалась: {auto_load_e}")
+        except Exception as e:
+             logger.warning(f"[INIT] Неизвестная ошибка при загрузке Opus: {e}")
+    
+    if discord.opus.is_loaded():
+        logger.info("[INIT] Opus библиотека доступна")
+    else:
+        logger.warning("[INIT] Opus библиотека не загружена - аудио может не работать")
+    
     # Запускаем фоновые задачи
     await start_background_tasks()
     
@@ -92,9 +166,8 @@ async def cleanup_task():
     await bot.wait_until_ready()
     while not bot.is_closed():
         try:
-            # Импортируем и вызываем функцию очистки
-            from functions import cleanup_inactive_players
-            await cleanup_inactive_players()
+            # Очистка неактивных музыкальных плееров
+            await musicplayer.cleanup_inactive_players()
         except Exception as e:
             logger.error(f"[CLEANUP TASK] Ошибка: {e}")
         await asyncio.sleep(300)  # Проверка каждые 5 минут
@@ -102,40 +175,23 @@ async def cleanup_task():
 @bot.event
 async def on_voice_state_update(member, before, after):
     try:
+        # Пропускаем если это не наш бот
+        if member.id != bot.user.id:
+            return
+            
         guild = member.guild
-        if not guild or guild.id not in functions.music_players:
+        if not guild:
             return
             
-        voice_client = guild.voice_client
-        
         # Если бот отключился
-        if member.id == bot.user.id and not after.channel:
+        if not after.channel:
             await asyncio.sleep(1)
-            if guild.id in functions.music_players:
-                async with functions.music_players[guild.id]['lock']:
-                    functions.music_players[guild.id]['queue'].clear()
-                functions.music_players.pop(guild.id, None)
+            if guild.id in musicplayer.music_players:
+                async with musicplayer.music_players[guild.id]['lock']:
+                    musicplayer.music_players[guild.id]['queue'].clear()
+                musicplayer.music_players.pop(guild.id, None)
             return
             
-        # Если бот остался один в канале
-        if (voice_client and voice_client.is_connected() and 
-            len(voice_client.channel.members) == 1 and
-            voice_client.channel.members[0].id == bot.user.id):
-            
-            await asyncio.sleep(60)  # Ждем 60 секунд перед отключением
-            
-            # Проверяем еще раз после ожидания
-            if (voice_client and voice_client.is_connected() and 
-                len(voice_client.channel.members) == 1 and
-                voice_client.channel.members[0].id == bot.user.id):
-                
-                if guild.id in functions.music_players:
-                    async with functions.music_players[guild.id]['lock']:
-                        functions.music_players[guild.id]['queue'].clear()
-                    functions.music_players.pop(guild.id, None)
-                await voice_client.disconnect()
-                logger.info(f"[VOICE] Бот отключен из-за отсутствия участников в канале")
-                
     except Exception as e:
         logger.error(f"[VOICE] Ошибка обработки состояния: {str(e)}")
 
@@ -166,24 +222,60 @@ async def on_command_error(ctx, error):
     except discord.errors.NotFound:
         pass
 
-@bot.command()
-async def start_game(ctx):
-    url = f"http://your-api-server:3000/session"
-    payload = {
-        "guildId": str(ctx.guild.id),
-        "channelId": str(ctx.channel.id)
-    }
-    response = requests.post(url, json=payload)
-    game_url = f"http://your-web-client.com?guild_id={ctx.guild.id}&channel_id={ctx.channel.id}"
-    await ctx.send(f"Новая игра начата: {game_url}")
+# Музыкальные команды (теперь используют musicplayer)
+@bot.tree.command(name="play", description="Воспроизвести трек")
+@app_commands.describe(query="Название или URL трека")
+@app_commands.check(check_music_channel)
+async def play_command(interaction: discord.Interaction, query: str):
+    await musicplayer.play_music(interaction, query)
 
-@bot.command()
-async def game_status(ctx):
-    session_id = f"{ctx.guild.id}-{ctx.channel.id}"
-    response = requests.get(f"http://your-api-server:3000/session/{session_id}")
-    status = response.json().get('status', 'not_found')
-    await ctx.send(f"Статус игры: {status}")
+@bot.tree.command(name="playlist", description="Добавить плейлист YouTube")
+@app_commands.describe(playlist_url="URL плейлиста YouTube")
+@app_commands.check(check_music_channel)
+async def playlist_command(interaction: discord.Interaction, playlist_url: str):
+    await musicplayer.play_playlist(interaction, playlist_url)
 
+@bot.tree.command(name="pause", description="Приостановить воспроизведение")
+@app_commands.check(check_music_channel)
+async def pause_command(interaction: discord.Interaction):
+    await musicplayer.pause_music(interaction)
+
+@bot.tree.command(name="resume", description="Возобновить воспроизведение")
+@app_commands.check(check_music_channel)
+async def resume_command(interaction: discord.Interaction):
+    await musicplayer.resume_music(interaction)
+
+@bot.tree.command(name="skip", description="Пропустить текущий трек")
+@app_commands.check(check_music_channel)
+async def skip_command(interaction: discord.Interaction):
+    await musicplayer.skip_music(interaction)
+
+@bot.tree.command(name="stop", description="Остановить воспроизведение и очистить очередь")
+@app_commands.check(check_music_channel)
+async def stop_command(interaction: discord.Interaction):
+    await musicplayer.stop_music(interaction)
+
+@bot.tree.command(name="loop_queue", description="Включить/выключить повтор плейлиста")
+@app_commands.check(check_music_channel)
+async def loop_queue_command(interaction: discord.Interaction):
+    await musicplayer.loop_queue(interaction)
+
+@bot.tree.command(name="loop_one", description="Включить/выключить повтор текущего трека")
+@app_commands.check(check_music_channel)
+async def loop_one_command(interaction: discord.Interaction):
+    await musicplayer.loop_one(interaction)
+
+@bot.tree.command(name="queue", description="Показать очередь треков")
+@app_commands.check(check_music_channel)
+async def queue_command(interaction: discord.Interaction):
+    await musicplayer.queue_music(interaction)
+
+@bot.tree.command(name="shuffle", description="Перемешать очередь")
+@app_commands.check(check_music_channel)
+async def shuffle_command(interaction: discord.Interaction):
+    await musicplayer.shuffle_music(interaction)
+
+# Остальные команды (экономика, игры и т.д.) остаются в functions.py
 @bot.hybrid_command(name='check', guild_ids=[537267521565229056])
 async def check(ctx):
     functions.log(f'Check by {ctx.author}', type='debug')
@@ -262,47 +354,31 @@ async def _help(ctx):
 async def _addmoney(ctx, member: discord.Member, coins: int):
     await functions.addmoney(ctx, member, coins)
 
-@bot.tree.command(name="play", description="Воспроизвести трек")
-@app_commands.describe(query="Название или URL трека")
-async def play_command(interaction: discord.Interaction, query: str):
-    await functions.play_music(interaction, query)
+# Команды для карты
+@bot.hybrid_command(name='map')
+async def _map(ctx):
+    '''Показать полную карту игры'''
+    log(f'{ctx.author} /map', type='debug')
+    await functions.show_full_map(ctx)
 
-@bot.tree.command(name="playlist", description="Добавить плейлист YouTube")
-@app_commands.describe(playlist_url="URL плейлиста YouTube")
-async def playlist_command(interaction: discord.Interaction, playlist_url: str):
-    await functions.play_playlist(interaction, playlist_url)
+@bot.hybrid_command(name='mymap')
+async def _mymap(ctx):
+    '''Показать карту вокруг вашего персонажа'''
+    log(f'{ctx.author} /mymap', type='debug')
+    await functions.show_player_map(ctx)
 
-@bot.tree.command(name="pause", description="Приостановить воспроизведение")
-async def pause_command(interaction: discord.Interaction):
-    await functions.pause_music(interaction)
+@bot.hybrid_command(name='setposition')
+@app_commands.describe(x="X координата (0-49)", y="Y координата (0-49)")
+async def _setposition(ctx, x: int, y: int):
+    '''Установить позицию на карте'''
+    log(f'{ctx.author} /setposition: {x}, {y}', type='debug')
+    await functions.set_position(ctx, x, y)
 
-@bot.tree.command(name="resume", description="Возобновить воспроизведение")
-async def resume_command(interaction: discord.Interaction):
-    await functions.resume_music(interaction)
-
-@bot.tree.command(name="skip", description="Пропустить текущий трек")
-async def skip_command(interaction: discord.Interaction):
-    await functions.skip_music(interaction)
-
-@bot.tree.command(name="stop", description="Остановить воспроизведение и очистить очередь")
-async def stop_command(interaction: discord.Interaction):
-    await functions.stop_music(interaction)
-
-@bot.tree.command(name="loop_queue", description="Включить/выключить повтор плейлиста")
-async def loop_queue_command(interaction: discord.Interaction):
-    await functions.loop_queue(interaction)
-
-@bot.tree.command(name="loop_one", description="Включить/выключить повтор текущего трека")
-async def loop_one_command(interaction: discord.Interaction):
-    await functions.loop_one(interaction)
-
-@bot.tree.command(name="queue", description="Показать очередь треков")
-async def queue_command(interaction: discord.Interaction):
-    await functions.queue_music(interaction)
-
-@bot.tree.command(name="shuffle", description="Перемешать очередь")
-async def shuffle_command(interaction: discord.Interaction):
-    await functions.shuffle_music(interaction)
+@bot.hybrid_command(name='position')
+async def _position(ctx):
+    '''Показать вашу текущую позицию'''
+    log(f'{ctx.author} /position', type='debug')
+    await functions.show_position(ctx)
 
 @bot.hybrid_command(name='svogamehelp')
 async def _svogamehelp(ctx):

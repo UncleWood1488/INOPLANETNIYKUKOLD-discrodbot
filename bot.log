@@ -1,0 +1,18 @@
+2025-12-21 13:07:27,690:INFO:discord.client: logging in using static token
+2025-12-21 13:07:30,513:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: 4d90821c6d374394903349dcbfd98e38).
+2025-12-21 13:07:32,542:INFO:discord: Проверка зависимостей...
+2025-12-21 13:07:32,547:INFO:discord: [DEPS] yt-dlp version: 2025.12.8
+2025-12-21 13:07:55,686:INFO:discord: [UPDATE] yt-dlp успешно обновлен
+2025-12-21 13:08:05,720:ERROR:discord: [NETWORK] Нет доступа к YouTube: <urlopen error timed out>
+2025-12-21 13:08:05,720:ERROR:discord: ВНИМАНИЕ: Нет доступа к YouTube. Музыкальные функции могут не работать.
+2025-12-21 13:08:05,721:INFO:discord: [INIT] Opus библиотека загружена
+2025-12-21 13:08:05,721:INFO:discord: [INIT] Opus библиотека доступна
+2025-12-21 13:08:05,722:INFO:discord: ############################################################
+2025-12-21 13:08:05,722:INFO:discord: *************Logged in as: ИНОПЛАНЕТНЫЙ КУКОЛД**************
+2025-12-21 13:08:05,722:INFO:discord: *****************Bot ID: 603938953749463050*****************
+2025-12-21 13:08:05,722:INFO:discord: ########################USER STATS:#########################
+2025-12-21 13:08:05,722:INFO:discord: ***********************All users: 21************************
+2025-12-21 13:08:05,722:INFO:discord: *************************Online: 6**************************
+2025-12-21 13:08:05,723:INFO:discord: ##################SYNCING SLASH COMMANDS:###################
+2025-12-21 13:08:43,229:INFO:discord: 🍉ИОНОТЕКА🍉: ['play', 'playlist', 'pause', 'resume', 'skip', 'stop', 'loop_queue', 'loop_one', 'queue', 'shuffle', 'check', 'roulette', 'work', 'bj', 'move', 'balance', 'fishing', 'shop', 'help', 'addmoney', 'map', 'mymap', 'setposition', 'position', 'svogamehelp', 'svogameprofile']
+2025-12-21 13:08:43,230:INFO:discord: ***************************Done!****************************

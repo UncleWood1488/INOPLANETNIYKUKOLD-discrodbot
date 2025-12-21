@@ -4,40 +4,29 @@ import discord
 from discord.ext import commands
 import time
 import db
-import yt_dlp
 import buttons
 import logging
-from embedmusicplayer import *
 from embedshop import *
 from shop import ShopView
-from functools import partial
 from blackjack import blackjack
 from random import randint, choice
 from emoji import *
 from config import (
     pay, cooldown, multiplier, new_worker_balance, fish_data,
-    MOD_ROLE_IDS, FFMPEG_PATH, FFMPEG_OPTIONS
+    MOD_ROLE_IDS, MAP_SETTINGS
 )
-from discord import FFmpegPCMAudio
-from yt_dlp import YoutubeDL, DownloadError
-import asyncio
+from map_generator import generate_full_map_embed, generate_player_map_embed
 
 logger = logging.getLogger(__name__)
 bjplayers = {}
 snakeplayers = {}
-music_players = {}
-music_lock = asyncio.Lock()  # Глобальный Lock для синхронизации
 
-# Проверка FFmpeg
-if not os.path.exists(FFMPEG_PATH):
-    logger.error(f"[FATAL] FFmpeg не найден: {os.path.abspath(FFMPEG_PATH)}")
-    raise RuntimeError("FFmpeg не установлен")
-else:
-    logger.info(f"[INIT] FFmpeg найден: {os.path.abspath(FFMPEG_PATH)}")
+bot = None
 
-FFmpegPCMAudio.executable = FFMPEG_PATH
+def setup_bot(bot_instance):
+    global bot
+    bot = bot_instance
 
-# Логирование
 def log(message: str, type: str = 'info'):
     if type == 'error':
         logger.error(message)
@@ -46,7 +35,6 @@ def log(message: str, type: str = 'info'):
     else:
         logger.info(message)
 
-#region Утилиты
 # Утилиты
 def get_online_members(bot):
     return [m.name for m in bot.get_all_members() if m.status != discord.Status.offline]
@@ -57,7 +45,7 @@ def replace_mention(message):
         f'@{message.mentions[0].name}'
     ) if message.mentions else message.content
 
-#region Админские команды
+# Админские команды
 async def move(ctx, members):
     role_names = [ctx.guild.get_role(role_id).name for role_id in MOD_ROLE_IDS]
     if not any(role.id in MOD_ROLE_IDS for role in ctx.author.roles) and not ctx.author.guild_permissions.move_members:
@@ -90,543 +78,57 @@ async def addmoney(ctx, member: discord.Member, coins: int):
     except Exception as e:
         logger.error(f"[DB] Ошибка: {str(e)}")
         await ctx.reply("⚠️ Ошибка базы данных", ephemeral=True)
-#endregion
 
-#region Музыкальный плеер
-async def get_music_player(guild_id):
-    """Получить или создать музыкального плеера для гильдии"""
-    async with music_lock:
-        if guild_id not in music_players:
-            music_players[guild_id] = {
-                'queue': [],
-                'lock': asyncio.Lock(),
-                'voice_channel': None,
-                'paused': False,
-                'volume': 0.8,
-                'now_playing': None,
-                'loop_mode': 'none',  # 'none', 'queue', 'one'
-                'current_track': None
-            }
-        return music_players[guild_id]
-
-async def yt_query(query: str):
-    # Упрощенные настройки для избежания ошибок
-    ytdl_options = {
-        'format': 'bestaudio/best',
-        'outtmpl': '%(extractor)s-%(id)s.%(ext)s',
-        'restrictfilenames': True,
-        'noplaylist': True,
-        'nocheckcertificate': True,
-        'ignoreerrors': False,
-        'logtostderr': False,
-        'quiet': True,
-        'no_warnings': True,
-        'default_search': 'auto',
-        'source_address': '0.0.0.0',
-        'force-ipv4': True,
-        'cachedir': False,
-    }
-
+# Функции карты
+async def show_full_map(ctx):
+    """Показать полную карту игры"""
     try:
-        # Обход ошибки импорта через прямое использование низкоуровневых функций
-        import yt_dlp
-        from yt_dlp import YoutubeDL
-        
-        # Создаем экземпляр с обработкой ошибок
-        ytdl = YoutubeDL(ytdl_options)
-        info = ytdl.extract_info(query, download=False)
-        ytdl.close()
-            
-        if 'entries' in info:
-            entries = info['entries']
-            if not entries:
-                raise yt_dlp.DownloadError("🔍 Нет результатов поиска")
-            track_info = entries[0]
-        else:
-            track_info = info
-
-        if not track_info.get('url'):
-            raise yt_dlp.DownloadError("🔇 Аудиопоток недоступен")
-
-        return {
-            'source': track_info['url'],
-            'title': track_info.get('title', 'Без названия')[:200],
-            'duration': track_info.get('duration', 0),
-            'url': track_info.get('webpage_url', query),
-            'author': track_info.get('uploader', 'Неизвестен')[:100],
-            'thumbnail': track_info.get('thumbnail') or 
-                       f"https://img.youtube.com/vi/{track_info.get('id', '')}/hqdefault.jpg"
-        }
-
-    except ImportError as e:
-        logger.error(f"[YTDL] Ошибка импорта: {str(e)}")
-        raise yt_dlp.DownloadError("❌ Проблема с библиотекой yt-dlp. Попробуйте переустановить.")
-    
+        embed, file = await generate_full_map_embed()
+        await ctx.reply(embed=embed, file=file)
     except Exception as e:
-        logger.error(f"[YTDL] Общая ошибка: {str(e)}")
-        raise yt_dlp.DownloadError("⚠️ Ошибка обработки трека")
-    
-async def yt_playlist_query(query: str, max_tracks: int = 50):
-    """Оптимизированная загрузка плейлиста"""
-    ytdl_options = {
-        'format': 'bestaudio/best',
-        'outtmpl': '%(extractor)s-%(id)s.%(ext)s',
-        'restrictfilenames': True,
-        'noplaylist': False,
-        'nocheckcertificate': True,
-        'ignoreerrors': True,  # Игнорируем ошибки для приватных видео
-        'logtostderr': False,
-        'quiet': True,
-        'no_warnings': True,
-        'extract_flat': True,  # Только метаданные, без информации о форматах
-        'playlistend': max_tracks,  # Ограничиваем количество треков
-        'source_address': '0.0.0.0',
-        'force-ipv4': True,
-        'cachedir': False,
-    }
+        logger.error(f"[MAP] Ошибка генерации карты: {str(e)}")
+        await ctx.reply("❌ Ошибка генерации карты", ephemeral=True)
 
+async def show_player_map(ctx):
+    """Показать карту вокруг игрока"""
     try:
-        import yt_dlp
-        from yt_dlp import YoutubeDL
-        
-        ytdl = YoutubeDL(ytdl_options)
-        info = await asyncio.to_thread(ytdl.extract_info, query, download=False)
-        ytdl.close()
-
-        if not info:
-            raise yt_dlp.DownloadError("🔍 Плейлист не найден или пуст")
-
-        tracks = []
-        if 'entries' in info:
-            for entry in info['entries']:
-                if entry and entry.get('url'):
-                    try:
-                        # Для каждого трека получаем полную информацию отдельно
-                        track_info = await yt_query(entry['url'])
-                        if track_info:
-                            tracks.append(track_info)
-                    except Exception as e:
-                        logger.warning(f"[PLAYLIST] Пропуск трека {entry.get('title', 'Unknown')}: {str(e)}")
-                        continue
-
-        if not tracks:
-            raise yt_dlp.DownloadError("❌ Не удалось загрузить ни одного трека из плейлиста")
-
-        return tracks
-
+        embed, file = await generate_player_map_embed(ctx.author.id, ctx.author.display_name)
+        await ctx.reply(embed=embed, file=file)
     except Exception as e:
-        logger.error(f"[PLAYLIST] Ошибка загрузки плейлиста: {str(e)}")
-        raise yt_dlp.DownloadError(f"⚠️ Ошибка загрузки плейлиста: {str(e)}")
+        logger.error(f"[PLAYER MAP] Ошибка генерации карты: {str(e)}")
+        await ctx.reply("❌ Ошибка генерации карты", ephemeral=True)
 
-async def play_music(interaction: discord.Interaction, query: str):
-    await interaction.response.defer()
+async def set_position(ctx, x: int, y: int):
+    """Установить позицию игрока на карте"""
     try:
-        if not interaction.user.voice:
-            return await interaction.followup.send(embed=error_embed("🔇 Подключитесь к голосовому каналу!"))
-        
-        channel = interaction.user.voice.channel
-        voice_client = interaction.guild.voice_client
-
-        try:
-            if voice_client and voice_client.is_connected():
-                if voice_client.channel != channel:
-                    await voice_client.move_to(channel)
-            else:
-                voice_client = await channel.connect()
-        except discord.ClientException as e:
-            return await interaction.followup.send(embed=error_embed(f"❌ Ошибка подключения: {str(e)}"))
-
-        # Определяем тип запроса (плейлист или одиночный трек)
-        is_playlist = any(keyword in query.lower() for keyword in ['playlist', 'list='])
-        
-        try:
-            if is_playlist:
-                # Отправляем сообщение о начале загрузки плейлиста
-                loading_msg = await interaction.followup.send("🔄 Загружаю плейлист... Это может занять некоторое время", ephemeral=True)
-                
-                tracks = await yt_playlist_query(query)
-                
-                player = await get_music_player(interaction.guild.id)
-                added_count = 0
-                async with player['lock']:
-                    for track in tracks:
-                        track['added_by'] = interaction.user.id
-                        player['queue'].append(track)
-                        added_count += 1
-
-                # Обновляем сообщение о результате
-                await loading_msg.edit(content=f"✅ Добавлено {added_count} треков из плейлиста")
-                
-            else:
-                # Одиночный трек
-                track = await yt_query(query)
-                track['added_by'] = interaction.user.id
-
-                player = await get_music_player(interaction.guild.id)
-                async with player['lock']:
-                    player['queue'].append(track)
-
-                await interaction.followup.send(
-                    f"🎵 Добавлено в очередь: **{track['title']}**", 
-                    ephemeral=True
-                )
-
-        except DownloadError as e:
-            return await interaction.followup.send(embed=error_embed(f"❌ {str(e)}"))
-
-        # Если ничего не играет, начинаем воспроизведение
-        if not voice_client.is_playing():
-            await play_next(interaction)
-
-    except Exception as e:
-        logger.error(f"[PLAY] Ошибка: {str(e)}")
-        await interaction.followup.send(embed=error_embed("⚠️ Ошибка воспроизведения"))
-
-# Добавим отдельную команду для плейлистов
-async def play_playlist(interaction: discord.Interaction, playlist_url: str):
-    """Отдельная команда для плейлистов"""
-    await interaction.response.defer()
-    try:
-        if not interaction.user.voice:
-            return await interaction.followup.send(embed=error_embed("🔇 Подключитесь к голосовому каналу!"))
-        
-        channel = interaction.user.voice.channel
-        voice_client = interaction.guild.voice_client
-
-        try:
-            if voice_client and voice_client.is_connected():
-                if voice_client.channel != channel:
-                    await voice_client.move_to(channel)
-            else:
-                voice_client = await channel.connect()
-        except discord.ClientException as e:
-            return await interaction.followup.send(embed=error_embed(f"❌ Ошибка подключения: {str(e)}"))
-
-        # Отправляем сообщение о начале загрузки
-        loading_msg = await interaction.followup.send("🔄 Загружаю плейлист... Это может занять некоторое время")
-
-        try:
-            tracks = await yt_playlist_query(playlist_url)
-            
-            player = await get_music_player(interaction.guild.id)
-            added_count = 0
-            async with player['lock']:
-                for track in tracks:
-                    track['added_by'] = interaction.user.id
-                    player['queue'].append(track)
-                    added_count += 1
-
-            # Обновляем сообщение о результате
-            embed = discord.Embed(
-                title="✅ Плейлист добавлен",
-                description=f"Добавлено {added_count} треков в очередь",
-                color=discord.Color.green()
-            )
-            await loading_msg.edit(content=None, embed=embed)
-
-        except DownloadError as e:
-            await loading_msg.edit(content=f"❌ {str(e)}")
-
-        # Если ничего не играет, начинаем воспроизведение
-        if not voice_client.is_playing():
-            await play_next(interaction)
-
-    except Exception as e:
-        logger.error(f"[PLAYLIST] Ошибка: {str(e)}")
-        await interaction.followup.send(embed=error_embed("⚠️ Ошибка загрузки плейлиста"))
-
-async def play_music(interaction: discord.Interaction, query: str):
-    await interaction.response.defer()
-    try:
-        if not interaction.user.voice:
-            return await interaction.followup.send(embed=error_embed("🔇 Подключитесь к голосовому каналу!"))
-        
-        channel = interaction.user.voice.channel
-        voice_client = interaction.guild.voice_client
-
-        try:
-            if voice_client and voice_client.is_connected():
-                if voice_client.channel != channel:
-                    await voice_client.move_to(channel)
-            else:
-                voice_client = await channel.connect()
-        except discord.ClientException as e:
-            return await interaction.followup.send(embed=error_embed(f"❌ Ошибка подключения: {str(e)}"))
-
-        try:
-            track = await yt_query(query)
-            track['added_by'] = interaction.user.id
-        except DownloadError as e:
-            return await interaction.followup.send(embed=error_embed(f"❌ {str(e)}"))
-
-        player = await get_music_player(interaction.guild.id)
-        async with player['lock']:
-            player['queue'].append(track)
-
-        # УБРАНЫ ДУБЛИРУЮЩИЕ ТЕКСТОВЫЕ СООБЩЕНИЯ
-        if not voice_client.is_playing():
-            await play_next(interaction)
-        else:
-            # Только ephemeral сообщение для добавления в очередь
-            await interaction.followup.send(
-                f"🎵 Добавлено в очередь: **{track['title']}**", 
-                ephemeral=True
-            )
-
-    except Exception as e:
-        logger.error(f"[PLAY] Ошибка: {str(e)}")
-        await interaction.followup.send(embed=error_embed("⚠️ Ошибка воспроизведения"))
-
-async def play_next(interaction: discord.Interaction):
-    try:
-        guild = interaction.guild
-        player = await get_music_player(guild.id)
-        voice = guild.voice_client
-
-        async with player['lock']:
-            # Проверяем режим повтора
-            if player['loop_mode'] == 'one' and player['current_track']:
-                # Повтор одного трека - используем текущий трек
-                current = player['current_track']
-            elif player['loop_mode'] == 'queue' and player['queue']:
-                # Повтор плейлиста - перемещаем текущий трек в конец
-                if player['current_track']:
-                    player['queue'].append(player['current_track'])
-                current = player['queue'].pop(0) if player['queue'] else None
-            else:
-                # Обычный режим - берем следующий трек
-                current = player['queue'].pop(0) if player['queue'] else None
-            
-            # Сохраняем текущий трек
-            player['current_track'] = current
-
-            if not current:
-                # Если треков нет, отключаемся
-                if voice and voice.is_connected():
-                    await voice.disconnect()
-                    music_players.pop(guild.id, None)
-                return
-
-        if not voice or not voice.is_connected():
+        if x < 0 or x >= MAP_SETTINGS['grid_size'] or y < 0 or y >= MAP_SETTINGS['grid_size']:
+            await ctx.reply(f"❌ Координаты должны быть от 0 до {MAP_SETTINGS['grid_size']-1}", ephemeral=True)
             return
-
-        def after_playback(error):
-            if error:
-                logger.error(f"[FFMPEG] Ошибка: {error}")
-            asyncio.run_coroutine_threadsafe(play_next(interaction), interaction.client.loop)
-
-        voice.play(
-            FFmpegPCMAudio(
-                source=current['source'],
-                executable=FFMPEG_PATH,
-                **FFMPEG_OPTIONS
-            ),
-            after=after_playback
-        )
         
-        # Отправляем embed с информацией о режиме повтора
-        embed, view = now_playing_embed(
-            title=current['title'],
-            url=current['url'],
-            duration=current['duration'],
-            author=current.get('author', 'Неизвестен'),
-            thumbnail=current.get('thumbnail', ''),
-            guild_id=guild.id,
-            loop_mode=player['loop_mode']
-        )
-        
-        try:
-            await interaction.followup.send(embed=embed, view=view)
-        except discord.NotFound:
-            logger.warning("[PLAYER] Interaction уже завершен, не отправляем embed")
-
+        db.set_player_position(ctx.author.id, x, y)
+        await ctx.reply(f"✅ Позиция установлена: X={x}, Y={y}", ephemeral=True)
     except Exception as e:
-        logger.error(f"[PLAYER] Ошибка: {str(e)}")
-        try:
-            await interaction.followup.send("⏭ Пропуск трека из-за ошибки", ephemeral=True)
-        except:
-            pass
-        await play_next(interaction)
+        logger.error(f"[SET POSITION] Ошибка: {str(e)}")
+        await ctx.reply("❌ Ошибка установки позиции", ephemeral=True)
 
-async def pause_music(interaction: discord.Interaction):
-    """Приостановить воспроизведение"""
-    if not await check_voice_channel(interaction):
-        return
-    
-    voice_client = interaction.guild.voice_client
-    if voice_client and voice_client.is_playing():
-        voice_client.pause()
-        await interaction.response.send_message("⏸️ Воспроизведение приостановлено")
-    else:
-        await interaction.response.send_message("⚠️ Нет активного воспроизведения", ephemeral=True)
-
-async def resume_music(interaction: discord.Interaction):
-    """Возобновить воспроизведение"""
-    if not await check_voice_channel(interaction):
-        return
-    
-    voice_client = interaction.guild.voice_client
-    if voice_client and voice_client.is_paused():
-        voice_client.resume()
-        await interaction.response.send_message("▶️ Воспроизведение возобновлено")
-    else:
-        await interaction.response.send_message("⚠️ Воспроизведение не приостановлено", ephemeral=True)
-
-async def skip_music(interaction: discord.Interaction):
-    """Пропустить текущий трек"""
-    if not await check_voice_channel(interaction):
-        return
-    
-    voice_client = interaction.guild.voice_client
-    if voice_client and (voice_client.is_playing() or voice_client.is_paused()):
-        voice_client.stop()
-        await interaction.response.send_message("⏭️ Трек пропущен")
-    else:
-        await interaction.response.send_message("⚠️ Нет активного воспроизведения", ephemeral=True)
-
-async def stop_music(interaction: discord.Interaction):
-    """Остановить воспроизведение и очистить очередь"""
-    if not await check_voice_channel(interaction):
-        return
-    
-    voice_client = interaction.guild.voice_client
-    if voice_client and voice_client.is_connected():
-        # Очищаем очередь
-        if interaction.guild.id in music_players:
-            async with music_players[interaction.guild.id]['lock']:
-                music_players[interaction.guild.id]['queue'].clear()
-        
-        await voice_client.disconnect()
-        await interaction.response.send_message("⏹️ Воспроизведение остановлено")
-    else:
-        await interaction.response.send_message("⚠️ Бот не подключен к голосовому каналу", ephemeral=True)
-        
-# Добавим команды для управления повтором:
-async def loop_queue(interaction: discord.Interaction):
-    """Включить/выключить повтор плейлиста"""
-    if not await check_voice_channel(interaction):
-        return
-    
-    guild_id = interaction.guild.id
-    if guild_id in music_players:
-        async with music_players[guild_id]['lock']:
-            if music_players[guild_id]['loop_mode'] == 'queue':
-                music_players[guild_id]['loop_mode'] = 'none'
-                await interaction.response.send_message("🔁 Повтор плейлиста выключен")
-            else:
-                music_players[guild_id]['loop_mode'] = 'queue'
-                await interaction.response.send_message("🔁 Повтор плейлиста включен")
-    else:
-        await interaction.response.send_message("⚠️ Нет активного плеера", ephemeral=True)
-
-async def loop_one(interaction: discord.Interaction):
-    """Включить/выключить повтор текущего трека"""
-    if not await check_voice_channel(interaction):
-        return
-    
-    guild_id = interaction.guild.id
-    if guild_id in music_players:
-        async with music_players[guild_id]['lock']:
-            if music_players[guild_id]['loop_mode'] == 'one':
-                music_players[guild_id]['loop_mode'] = 'none'
-                await interaction.response.send_message("🔂 Повтор трека выключен")
-            else:
-                music_players[guild_id]['loop_mode'] = 'one'
-                await interaction.response.send_message("🔂 Повтор трека включен")
-    else:
-        await interaction.response.send_message("⚠️ Нет активного плеера", ephemeral=True)
-
-# В functions.py обновим функцию queue_music для использования эмбеда с кнопками:
-async def queue_music(interaction: discord.Interaction):
-    """Показать очередь треков"""
-    if interaction.guild.id in music_players:
-        queue = music_players[interaction.guild.id]['queue']
-        loop_mode = music_players[interaction.guild.id]['loop_mode']
-        embed = queue_embed(queue, loop_mode)  # Теперь возвращает только embed без view
-        await interaction.response.send_message(embed=embed)
-    else:
-        await interaction.response.send_message("⚠️ Очередь пуста", ephemeral=True)
-
-async def shuffle_music(interaction: discord.Interaction):
-    """Перемешать очередь"""
-    if not await check_voice_channel(interaction):
-        return
-    
-    import random
-    guild_id = interaction.guild.id
-    if guild_id in music_players:
-        async with music_players[guild_id]['lock']:
-            queue = music_players[guild_id]['queue']
-            if len(queue) > 1:
-                random.shuffle(queue)
-                await interaction.response.send_message("🔀 Очередь перемешана")
-            else:
-                await interaction.response.send_message("⚠️ В очереди недостаточно треков", ephemeral=True)
-    else:
-        await interaction.response.send_message("⚠️ Очередь пуста", ephemeral=True)
-
-async def check_voice_channel(interaction: discord.Interaction) -> bool:
-    """Проверка что пользователь в голосовом канале с ботом"""
-    if not interaction.user.voice:
-        await interaction.response.send_message(
-            "🔇 Вы должны быть в голосовом канале!", 
-            ephemeral=True
-        )
-        return False
-
-    voice_client = interaction.guild.voice_client
-    if not voice_client or not voice_client.is_connected():
-        await interaction.response.send_message(
-            "🔇 Бот не подключен к голосовому каналу!", 
-            ephemeral=True
-        )
-        return False
-
-    if interaction.user.voice.channel != voice_client.channel:
-        await interaction.response.send_message(
-            "🔇 Вы должны быть в том же голосовом канале что и бот!", 
-            ephemeral=True
-        )
-        return False
-
-    return True
-
-async def cleanup_inactive_players():
-    """Очистка неактивных музыкальных плееров"""
+async def show_position(ctx):
+    """Показать текущую позицию игрока"""
     try:
-        current_time = time.time()
-        guilds_to_remove = []
+        x, y = db.get_player_position(ctx.author.id)
+        embed = discord.Embed(
+            title="📍 Ваша позиция на карте",
+            color=discord.Color.blue()
+        )
+        embed.add_field(name="X координата", value=str(x), inline=True)
+        embed.add_field(name="Y координата", value=str(y), inline=True)
+        embed.add_field(name="Область карты", value=f"{MAP_SETTINGS['grid_size']}x{MAP_SETTINGS['grid_size']}", inline=True)
         
-        for guild_id, player_data in music_players.items():
-            # Проверяем, есть ли голосовое подключение и активность
-            voice_client = None
-            # Получаем голосовой клиент через глобальную переменную
-            from main import bot  # Импортируем bot из main
-            guild = bot.get_guild(guild_id)
-            if guild:
-                voice_client = guild.voice_client
-            
-            # Условия для очистки:
-            # 1. Нет голосового подключения И очередь пуста
-            # 2. Или прошло более 5 минут с последней активности
-            should_remove = (
-                (not voice_client or not voice_client.is_connected()) and 
-                not player_data['queue']
-            )
-            
-            if should_remove:
-                guilds_to_remove.append(guild_id)
-        
-        # Удаляем отмеченные гильдии
-        for guild_id in guilds_to_remove:
-            music_players.pop(guild_id, None)
-            logger.info(f"[CLEANUP] Удален неактивный плеер для гильдии {guild_id}")
-            
+        await ctx.reply(embed=embed, ephemeral=True)
     except Exception as e:
-        logger.error(f"[CLEANUP] Ошибка очистки: {str(e)}")
-#endregion
+        logger.error(f"[POSITION] Ошибка: {str(e)}")
+        await ctx.reply("❌ Ошибка получения позиции", ephemeral=True)
 
-#region Экономика
+# Экономика
 async def balance(ctx):
     try:
         balance = db.get_balance(ctx.author.id)
@@ -669,9 +171,27 @@ async def work(ctx):
     except Exception as e:
         logger.error(f"[WORK] Ошибка: {str(e)}")
         await ctx.reply("⚠️ Ошибка выполнения работы", ephemeral=True)
-#endregion
 
-#region Мини-игры
+async def shop(ctx):
+    """Открыть магазин"""
+    try:
+        user_id = ctx.author.id
+        if not db.is_user_exists(user_id):
+            db.register_user(user_id)
+        
+        from embedshop import create_main_embed
+        from shop import ShopView
+        
+        embed = create_main_embed(ctx.author)
+        view = ShopView(ctx.author)
+        message = await ctx.reply(embed=embed, view=view, ephemeral=True)
+        view.message = message
+        
+    except Exception as e:
+        logger.error(f"[SHOP] Ошибка: {str(e)}")
+        await ctx.reply("⚠️ Ошибка открытия магазина", ephemeral=True)
+
+# Мини-игры
 async def bj(ctx, bet: int):
     try:
         if ctx.author.id in bjplayers:
@@ -712,9 +232,8 @@ async def fishing(ctx):
     except Exception as e:
         logger.error(f"[FISHING] Ошибка: {str(e)}")
         await ctx.reply("🎣 Ошибка рыбалки", ephemeral=True)
-#endregion
 
-#region Хелперы
+# Хелперы
 async def help(ctx):
     emb = discord.Embed(
         title="📚 Помощь",
@@ -739,11 +258,61 @@ async def help(ctx):
         )
     )
     await ctx.reply(embed=emb, ephemeral=True)
-#endregion
 
-# Очистка данных при выходе из голосового канала
-async def on_voice_state_update(member, before, after):
-    if member.bot and not after.channel:
-        guild_id = member.guild.id
-        if guild_id in music_players:
-            music_players.pop(guild_id, None)
+async def svogamehelp(ctx):
+    """Помощь по игре СВО"""
+    embed = discord.Embed(
+        title="🎮 Помощь по игре 'Специальная Военная Операция'",
+        color=discord.Color.dark_green(),
+        description=(
+            "**Основные команды:**\n"
+            "`/svogameprofile` - Показать ваш профиль\n"
+            "`/svogameattack [@игрок]` - Атаковать другого игрока\n"
+            "`/svogamebuy [предмет]` - Купить оружие или технику\n\n"
+            "**Статистика:**\n"
+            "• Уровень и опыт\n"
+            "• Здоровье и броня\n"
+            "• Оружие и техника\n"
+            "• Убийства и смерти\n"
+        )
+    )
+    await ctx.reply(embed=embed, ephemeral=True)
+
+async def svogameprofile(ctx):
+    """Показать профиль СВО"""
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT lvl, exp, hp, armor, weapon, vehicle, kills, deaths FROM svo WHERE user_id = ?",
+                (ctx.author.id,)
+            )
+            result = cursor.fetchone()
+            
+            if not result:
+                cursor.execute("""
+                    INSERT INTO svo (user_id, lvl, exp, hp, armor, weapon, vehicle) 
+                    VALUES (?, 1, 0, 100, 0, 1, 1)
+                """, (ctx.author.id,))
+                conn.commit()
+                result = (1, 0, 100, 0, 1, 1, 0, 0)
+            
+            lvl, exp, hp, armor, weapon, vehicle, kills, deaths = result
+            
+            embed = discord.Embed(
+                title=f"🎮 Профиль {ctx.author.display_name}",
+                color=discord.Color.dark_green()
+            )
+            
+            embed.add_field(name="⚔️ Уровень", value=f"{lvl} (Опыт: {exp}/100)", inline=True)
+            embed.add_field(name="❤️ Здоровье", value=f"{hp}/100", inline=True)
+            embed.add_field(name="🛡️ Броня", value=armor, inline=True)
+            embed.add_field(name="🔫 Оружие", value=f"Уровень {weapon}", inline=True)
+            embed.add_field(name="🚗 Техника", value=f"Уровень {vehicle}", inline=True)
+            embed.add_field(name="🎯 Статистика", value=f"Убийств: {kills}\nСмертей: {deaths}", inline=True)
+            
+            await ctx.reply(embed=embed, ephemeral=True)
+            
+    except Exception as e:
+        logger.error(f"[SVO PROFILE] Ошибка: {str(e)}")
+        await ctx.reply("⚠️ Ошибка загрузки профиля", ephemeral=True)
