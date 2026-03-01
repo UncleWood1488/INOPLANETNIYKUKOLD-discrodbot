@@ -1,0 +1,23 @@
+2026-02-28 14:48:04,059:INFO:discord.client: logging in using static token
+2026-02-28 14:48:05,326:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: 708e6003cc603f0ac130fc4898a020b7).
+2026-02-28 14:48:07,342:INFO:discord: Проверка зависимостей...
+2026-02-28 14:48:07,350:INFO:discord: [DEPS] yt-dlp version: 2025.12.8
+2026-02-28 14:48:23,048:INFO:discord: [UPDATE] yt-dlp успешно обновлен
+2026-02-28 14:48:23,310:INFO:discord: [NETWORK] YouTube доступен
+2026-02-28 14:48:23,345:INFO:discord: [INIT] Opus библиотека загружена
+2026-02-28 14:48:23,345:INFO:discord: [INIT] Opus библиотека доступна
+2026-02-28 14:48:23,346:INFO:discord: ############################################################
+2026-02-28 14:48:23,346:INFO:discord: *************Logged in as: ИНОПЛАНЕТНЫЙ КУКОЛД**************
+2026-02-28 14:48:23,347:INFO:discord: *****************Bot ID: 603938953749463050*****************
+2026-02-28 14:48:23,347:INFO:discord: ########################USER STATS:#########################
+2026-02-28 14:48:23,347:INFO:discord: ***********************All users: 20************************
+2026-02-28 14:48:23,347:INFO:discord: *************************Online: 9**************************
+2026-02-28 14:48:23,347:INFO:discord: ##################SYNCING SLASH COMMANDS:###################
+2026-02-28 14:48:23,690:INFO:discord: 🍉ИОНОТЕКА🍉: ['play', 'playlist', 'pause', 'resume', 'skip', 'stop', 'loop_queue', 'loop_one', 'queue', 'shuffle', 'check', 'roulette', 'work', 'bj', 'move', 'balance', 'fishing', 'shop', 'help', 'addmoney', 'map', 'mymap', 'setposition', 'position', 'svogamehelp', 'svogameprofile']
+2026-02-28 14:48:23,690:INFO:discord: ***************************Done!****************************
+2026-02-28 14:49:22,799:INFO:discord.voice_state: Connecting to voice...
+2026-02-28 14:49:22,799:INFO:discord.voice_state: Starting voice handshake... (connection attempt 1)
+2026-02-28 14:49:23,080:INFO:discord.voice_state: Voice handshake complete. Endpoint found: finland10010.discord.media:443
+2026-02-28 14:49:23,419:INFO:discord.voice_state: Voice connection complete.
+2026-02-28 14:51:25,186:INFO:discord.player: ffmpeg process 11624 successfully terminated with return code of 0.
+2026-02-28 14:51:25,186:INFO:discord.voice_state: The voice handshake is being terminated for Channel ID 423967161351143425 (Guild ID 406211807435423754)
