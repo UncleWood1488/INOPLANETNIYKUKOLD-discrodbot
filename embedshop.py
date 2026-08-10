@@ -57,14 +57,19 @@ def create_welcome_embed(user: discord.User) -> discord.Embed:
 def format_fish_stats(user_id: int) -> str:
     """Форматирует статистику рыбы в строку."""
     fish_stats = get_fishing_stats(user_id)
+    # Исключаем лутбоксы из этого форматирования, они будут в отдельном поле
+    fish_only = {k: v for k, v in fish_stats.items() if k in FISH_PRICES}
     return "\n".join(
         f"{fish_data[fish]['emoji']} {fish_data[fish]['name']}: {count} (Цена: {FISH_PRICES[fish]}{SKUFCOIN_EMOJI}/шт)"
-        for fish, count in fish_stats.items() if count > 0
+        for fish, count in fish_only.items() if count > 0
     ) or "Пусто"
 
 def create_main_embed(user: discord.User) -> discord.Embed:
     """Создает основное меню магазина."""
     balance = get_balance(user.id) or 0
+    stats = get_fishing_stats(user.id)
+    lootboxes = stats.get('lootboxes', 0)
+    
     embed = discord.Embed(
         title="🛒 Магазин Скуфкоинов",
         color=discord.Color.gold(),
@@ -77,6 +82,13 @@ def create_main_embed(user: discord.User) -> discord.Embed:
     embed.add_field(
         name="💰 Ваш баланс",
         value=f"{balance} {SKUFCOIN_EMOJI}",
+        inline=False
+    )
+    
+    # Блок с лутбоксами
+    embed.add_field(
+        name="📦 Лутбоксы",
+        value=f"У вас **{lootboxes}** лутбоксов",
         inline=False
     )
     
@@ -93,6 +105,9 @@ def create_main_embed(user: discord.User) -> discord.Embed:
 def create_sell_fish_embed(user: discord.User) -> discord.Embed:
     """Создает Embed для продажи рыбы."""
     balance = get_balance(user.id) or 0
+    stats = get_fishing_stats(user.id)
+    lootboxes = stats.get('lootboxes', 0)
+    
     embed = discord.Embed(
         title="💰 Продажа рыбы",
         color=discord.Color.green(),
@@ -108,9 +123,16 @@ def create_sell_fish_embed(user: discord.User) -> discord.Embed:
         inline=False
     )
     
+    # Блок с лутбоксами (опционально)
+    embed.add_field(
+        name='📦 Лутбоксы',
+        value=f"У вас **{lootboxes}** лутбоксов",
+        inline=False
+    )
+    
     # Блок с уловом
-    fish_stats = get_fishing_stats(user.id)
-    if fish_stats:
+    fish_stats = {k: v for k, v in stats.items() if k in FISH_PRICES}
+    if fish_stats and any(fish_stats.values()):
         embed.add_field(
             name="Ваш улов",
             value=format_fish_stats(user.id),
@@ -130,6 +152,7 @@ def create_category_embed(user: discord.User, page: int) -> discord.Embed:
     """Создает Embed для категорий магазина."""
     balance = get_balance(user.id) or 0
     fish_stats = get_fishing_stats(user.id) or {}
+    lootboxes = fish_stats.get('lootboxes', 0)
     
     embed = discord.Embed(color=discord.Color.gold())
     icon_url = user.avatar.url if user.avatar else None
@@ -139,6 +162,13 @@ def create_category_embed(user: discord.User, page: int) -> discord.Embed:
     embed.add_field(
         name='Баланс',
         value=f"{balance} {SKUFCOIN_EMOJI}",
+        inline=False
+    )
+    
+    # Блок с лутбоксами
+    embed.add_field(
+        name='📦 Лутбоксы',
+        value=f"У вас **{lootboxes}** лутбоксов",
         inline=False
     )
     

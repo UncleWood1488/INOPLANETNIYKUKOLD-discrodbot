@@ -13,7 +13,7 @@ from random import randint, choice
 from emoji import *
 from config import (
     pay, cooldown, multiplier, new_worker_balance, fish_data,
-    MOD_ROLE_IDS, MAP_SETTINGS
+    MOD_ROLE_IDS, MAP_SETTINGS, LOOTBOX
 )
 from map_generator import generate_full_map_embed, generate_player_map_embed
 
@@ -193,23 +193,43 @@ async def shop(ctx):
 
 # Мини-игры
 async def bj(ctx, bet: int):
+    """
+    Игра в Blackjack.
+    Исправлена проверка баланса: теперь используется прямое сравнение,
+    добавлено логирование, проверка на положительную ставку,
+    корректное удаление игрока из bjplayers.
+    """
+    game = None  # для отслеживания создания игры
     try:
+        # Проверка, не в игре ли уже пользователь
         if ctx.author.id in bjplayers:
             return await ctx.reply("⚠️ Вы уже в игре!", ephemeral=True)
         
-        if not db.is_enought(ctx.author.id, bet):
+        # Проверка на положительную ставку
+        if bet <= 0:
+            return await ctx.reply("❌ Ставка должна быть положительной!", ephemeral=True)
+
+        # Получаем баланс напрямую (избегаем возможной ошибки в db.is_enought)
+        balance = db.get_balance(ctx.author.id)
+        logger.debug(f"[BJ] User {ctx.author.id} balance: {balance}, bet: {bet}")
+
+        if balance < bet:
             return await ctx.reply("❌ Недостаточно средств!", ephemeral=True)
 
+        # Создаём игру (конструктор списывает ставку)
         game = blackjack(ctx.author, bet)
         bjplayers[ctx.author.id] = game
-        view = await buttons.bj_buttons(ctx, game)
+        view = await buttons.bj_buttons(ctx, bjplayers)
         await ctx.reply(game.prepare_message(), view=view)
 
     except Exception as e:
         logger.error(f"[BJ] Ошибка: {str(e)}")
         await ctx.reply("⚠️ Ошибка запуска игры", ephemeral=True)
     finally:
-        if ctx.author.id in bjplayers:
+        # Если игра не была создана (исключение произошло до добавления в bjplayers),
+        # но запись всё же есть (например, из-за предыдущей ошибки) — удаляем.
+        # Используем проверку: если game is None, значит создание не завершилось.
+        if game is None and ctx.author.id in bjplayers:
             del bjplayers[ctx.author.id]
 
 async def fishing(ctx):
@@ -225,13 +245,68 @@ async def fishing(ctx):
             cd = f"{int(remaining // 60)} мин. {int(remaining % 60)} сек."
             return await ctx.reply(f"⏳ Кулдаун: {cd}", ephemeral=True)
 
+        # Ловим рыбу
         caught_fish = db.fishing(user_id)
         db.set_cooldown(user_id, 'fishing', cooldown['fishing'])
-        await ctx.reply(embed=create_fish_embed(ctx.author, caught_fish))
+        
+        # Проверяем шанс выпадения лутбокса
+        lootbox_message = ""
+        import random
+        if random.random() < LOOTBOX['drop_chance']:
+            db.add_lootbox(user_id, 1)
+            lootbox_message = "\n\n📦 **Вам выпал лутбокс!** Загляните в магазин, чтобы открыть его."
+
+        embed = create_fish_embed(ctx.author, caught_fish)
+        if lootbox_message:
+            if embed.description:
+                embed.description += lootbox_message
+            else:
+                embed.description = lootbox_message
+        
+        await ctx.reply(embed=embed)
 
     except Exception as e:
         logger.error(f"[FISHING] Ошибка: {str(e)}")
         await ctx.reply("🎣 Ошибка рыбалки", ephemeral=True)
+
+async def open_lootbox(user_id: int):
+    """
+    Открывает один лутбокс, начисляет награду.
+    Возвращает кортеж (успех: bool, сообщение: str)
+    """
+    from config import LOOTBOX, fish_data
+    import random
+
+    # Проверяем наличие лутбоксов
+    lootboxes = db.get_lootboxes(user_id)
+    if lootboxes <= 0:
+        return False, "У вас нет лутбоксов!"
+
+    # Уменьшаем количество
+    db.remove_lootbox(user_id, 1)
+
+    # Выбираем тип награды по весам
+    reward_type = random.choices(
+        population=list(LOOTBOX['reward_weights'].keys()),
+        weights=list(LOOTBOX['reward_weights'].values())
+    )[0]
+
+    if reward_type == 'fish':
+        # Выбираем случайный вид рыбы
+        fish_type = random.choice(['cod', 'salmon', 'tropical', 'squid'])
+        min_q, max_q = LOOTBOX['rewards']['fish'][fish_type]
+        amount = random.randint(min_q, max_q)
+        db.add_fish(user_id, fish_type, amount)
+        
+        fish_name = fish_data[fish_type]['name']
+        fish_emoji = fish_data[fish_type]['emoji']
+        return True, f"Вы получили {fish_emoji} **{fish_name}** x{amount}!"
+
+    else:  # coins
+        min_c, max_c = LOOTBOX['rewards']['coins']
+        amount = random.randint(min_c, max_c)
+        db.add_money(user_id, amount)
+        return True, f"Вы получили {amount} скуфкоинов {SKUFCOIN_EMOJI}!"
 
 # Хелперы
 async def help(ctx):

@@ -79,7 +79,29 @@ def init_db():
             last_updated TEXT DEFAULT CURRENT_TIMESTAMP
         )""")
         
-        conn.commit()  # Фиксация изменений
+        # --- НОВОЕ: таблица апгрейдов ---
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS upgrades (
+            user_id INTEGER PRIMARY KEY,
+            net INTEGER DEFAULT 0,
+            pro_rod INTEGER DEFAULT 0,
+            improved_bag INTEGER DEFAULT 0,
+            golden_pickaxe INTEGER DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )""")
+        
+        conn.commit()
+
+# Добавляем столбец lootboxes в таблицу fish, если его нет
+def add_lootbox_column():
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(fish)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'lootboxes' not in columns:
+            cursor.execute("ALTER TABLE fish ADD COLUMN lootboxes INTEGER DEFAULT 0")
+            conn.commit()
+            print("[DB] Добавлен столбец lootboxes в таблицу fish")
 
 @contextmanager
 def get_connection():
@@ -96,6 +118,7 @@ def get_connection():
 
 # Инициализация БД при первом запуске
 init_db()
+add_lootbox_column()  # Добавляем столбец лутбоксов
 
 #-----------------------------------------------------------------------------------ВАЛЮТА
 # Регистрация пользователя
@@ -131,9 +154,15 @@ def register_user(user_id):
             VALUES (?, ?, ?)
         """, (user_id, random.randint(0, MAP_SETTINGS['grid_size']-1), random.randint(0, MAP_SETTINGS['grid_size']-1)))
         
+        # --- НОВОЕ: регистрация в upgrades ---
+        conn.execute("""
+            INSERT OR IGNORE INTO upgrades (user_id) 
+            VALUES (?)
+        """, (user_id,))
+        
         conn.commit()
         
-# Проверка баланса
+# Проверка баланса (старая функция, используется в некоторых местах)
 def is_enought(user_id, need):
     with get_connection() as conn:
         cur = conn.cursor()
@@ -220,7 +249,7 @@ def get_cooldown(user_id: int, action: str) -> float:
         return 0.0
     
     remaining = result[0] - time.time()
-    return max(0.0, remaining)  # Не может быть отрицательным
+    return max(0.0, remaining)
 
 #-----------------------------------------------------------------------------------РЫБАЛКА
 def fishing(user_id: int) -> str:
@@ -260,14 +289,14 @@ def get_fishing_stats(user_id: int) -> dict:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT cod, salmon, tropical, squid 
+            SELECT cod, salmon, tropical, squid, lootboxes
             FROM fish 
             WHERE user_id = ?
         """, (user_id,))
         result = cursor.fetchone()
         
     if not result:
-        return {"cod": 0, "salmon": 0, "tropical": 0, "squid": 0}
+        return {"cod": 0, "salmon": 0, "tropical": 0, "squid": 0, "lootboxes": 0}
         
     return dict(result)
 
@@ -358,6 +387,74 @@ def get_all_player_positions():
         cursor = conn.cursor()
         cursor.execute("SELECT user_id, x, y FROM map_positions")
         return {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
+
+#-----------------------------------------------------------------------------------АПГРЕЙДЫ (НОВОЕ)
+def get_upgrade(user_id: int, upgrade: str) -> int:
+    """Возвращает 0 или 1 для конкретного апгрейда"""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(f"SELECT {upgrade} FROM upgrades WHERE user_id = ?", (user_id,))
+        result = cur.fetchone()
+        return result[0] if result else 0
+
+def set_upgrade(user_id: int, upgrade: str, value: int):
+    """Устанавливает значение апгрейда (0 или 1)"""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(f"UPDATE upgrades SET {upgrade} = ? WHERE user_id = ?", (value, user_id))
+        conn.commit()
+
+def get_all_upgrades(user_id: int) -> dict:
+    """Возвращает словарь со всеми апгрейдами пользователя"""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT net, pro_rod, improved_bag, golden_pickaxe FROM upgrades WHERE user_id = ?", (user_id,))
+        result = cur.fetchone()
+        if result:
+            return dict(result)
+        return {'net': 0, 'pro_rod': 0, 'improved_bag': 0, 'golden_pickaxe': 0}
+
+#-----------------------------------------------------------------------------------ЛУТБОКСЫ (НОВОЕ)
+def get_lootboxes(user_id: int) -> int:
+    """Возвращает количество лутбоксов у пользователя"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT lootboxes FROM fish WHERE user_id = ?", (user_id,))
+        result = cursor.fetchone()
+        return result[0] if result else 0
+
+def add_lootbox(user_id: int, amount: int = 1):
+    """Добавляет лутбоксы пользователю"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO fish (user_id, lootboxes) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET lootboxes = lootboxes + ?
+        """, (user_id, amount, amount))
+        conn.commit()
+
+def remove_lootbox(user_id: int, amount: int = 1):
+    """Убирает лутбоксы у пользователя (проверка на отрицательное значение не выполняется)"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE fish SET lootboxes = lootboxes - ? WHERE user_id = ?
+        """, (amount, user_id))
+        conn.commit()
+
+def add_fish(user_id: int, fish_type: str, amount: int = 1):
+    """Добавляет определённый вид рыбы пользователю"""
+    valid_types = ['cod', 'salmon', 'tropical', 'squid']
+    if fish_type not in valid_types:
+        raise ValueError(f"Неверный тип рыбы. Допустимо: {valid_types}")
+    
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(f"""
+            INSERT INTO fish (user_id, {fish_type}) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET {fish_type} = {fish_type} + ?
+        """, (user_id, amount, amount))
+        conn.commit()
 
 # Добавьте в конец db.py для теста
 if __name__ == "__main__":

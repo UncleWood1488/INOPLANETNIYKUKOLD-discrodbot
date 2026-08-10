@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Special Military Operation Map</title>
+    <!-- Временная пустая иконка -->
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+            transition: background-color 0.3s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            height: 60px;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .header-title {
+            flex: 1;
+            text-align: right;
+            font-size: 1.5em;
+            color: #333;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .map-section {
+            flex: 3;
+            position: relative;
+        }
+
+        .info-section {
+            flex: 1;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            overflow-y: auto;
+            border-left: 1px solid #ddd;
+        }
+
+        .map-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            cursor: grab;
+            overflow: hidden;
+        }
+
+        .map-container.grabbing {
+            cursor: grabbing;
+        }
+
+        .map-grid {
+            display: grid;
+            grid-template-columns: repeat(50, 100px);
+            grid-template-rows: repeat(50, 100px);
+            position: absolute;
+            transform-origin: 0 0;
+            transition: transform 0.1s;
+            background-color: transparent;
+        }
+
+        .grid-item {
+            width: 100px;
+            height: 100px;
+            border: 1px solid rgba(221, 221, 221, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            user-select: none;
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .grid-item:hover {
+            background-color: rgba(224, 224, 255, 0.5);
+        }
+
+        .coordinates {
+            font-size: 1.2em;
+            color: #666;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+
+        .control-button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s;
+        }
+
+        #themeButton { 
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background-color: #4CAF50;
+            color: white;
+        }
+        #resetButton { 
+            position: absolute;
+            bottom: 80px;
+            left: 20px;
+            background-color: #4CAF50;
+            color: white;
+        }
+        #menuButton { 
+            position: absolute;
+            bottom: 140px;
+            left: 20px;
+            background-color: #4CAF50;
+            color: white;
+        }
+        #discordButton { 
+            background-color: #5865F2;
+            color: white;
+        }
+
+        .menu-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            backdrop-filter: blur(5px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .menu-content {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+
+        .info-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 3000;
+        }
+
+        body.dark {
+            background-color: #212121;
+        }
+        body.dark .header {
+            background: rgba(51, 51, 51, 0.9);
+        }
+        body.dark .header-title {
+            color: white;
+        }
+        body.dark .info-section {
+            background: rgba(51, 51, 51, 0.8);
+            border-left-color: #666;
+        }
+        body.dark .control-button {
+            background-color: #f0f0f0;
+            color: #212121;
+        }
+        body.dark .grid-item {
+            background-color: rgba(0, 0, 0, 0.3);
+            border-color: rgba(102, 102, 102, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button class="control-button" id="discordButton">Войти через Discord</button>
+        <div class="header-title">Карта специальной военной операции 🍉ИОНОТЕКА🍉</div>
+    </div>
+
+    <div class="main-content">
+        <div class="map-section">
+            <div class="map-container" id="mapContainer">
+                <div class="map-grid" id="mapGrid"></div>
+            </div>
+            
+            <button class="control-button" id="themeButton">Тёмный фон</button>
+            <button class="control-button" id="resetButton">Центрирование</button>
+            <button class="control-button" id="menuButton">Меню</button>
+        </div>
+
+    <div class="menu-overlay" id="menuOverlay">
+        <div class="menu-content">
+            <button class="control-button menu-button" onclick="alert('Настройки')">Настройки</button>
+            <button class="control-button menu-button" onclick="alert('Справка')">Справка</button>
+            <button class="control-button menu-button" onclick="toggleMenu()">Закрыть</button>
+        </div>
+    </div>
+
+    <div class="info-overlay" id="infoOverlay">
+        <div class="info-window">
+            <button class="close-button" onclick="closeInfo()">×</button>
+            <h2>Информация о клетке</h2>
+            <p>Координаты: <span id="cellCoords">X:0, Y:0</span></p>
+            <p>Статус: Свободна</p>
+            <p>Размер: 100x100px</p>
+        </div>
+    </div>
+
+    <!-- Скрипт для автоматического обновления иконки -->
+    <script>
+        // Конфигурация
+        const GUILD_ID = '406211807435423754';
+        const PROXY_URL = 'https://your-proxy.com/discord-api/'; // Ваш прокси-сервер
+
+        // Функция обновления иконки
+        const updateFavicon = async () => {
+            try {
+                const response = await fetch(`${PROXY_URL}guilds/${GUILD_ID}`);
+                const data = await response.json();
+                
+                if (data.icon) {
+                    const format = data.icon.startsWith('a_') ? 'gif' : 'png';
+                    const iconUrl = `https://cdn.discordapp.com/icons/${GUILD_ID}/${data.icon}.${format}`;
+                    
+                    const link = document.querySelector('link[rel="icon"]');
+                    link.type = `image/${format}`;
+                    link.href = iconUrl;
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки иконки:', error);
+            }
+        };
+
+        // Запуск при загрузке и каждые 2 часа
+        updateFavicon();
+        setInterval(updateFavicon, 7200000);
+    </script>
+
+    <!-- Основной скрипт -->
+    <script>
+        const DISCORD_CLIENT_ID = '603938953749463050';
+        const DISCORD_REDIRECT_URI = encodeURIComponent('https://discord.local');
+        const DISCORD_SCOPE = encodeURIComponent('identify email');
+
+        const gridSize = 50;
+        const mapContainer = document.getElementById('mapContainer');
+        const mapGrid = document.getElementById('mapGrid');
+        
+        let scale = 1;
+        let posX = 0;
+        let posY = 0;
+        let isDragging = false;
+        let startX, startY;
+        const minScale = 0.3;
+        const maxScale = 8;
+        const baseWidth = 100 * gridSize;
+        const baseHeight = 100 * gridSize;
+
+        function initGrid() {
+            mapGrid.innerHTML = '';
+            for (let row = 0; row < gridSize; row++) {
+                for (let col = 0; col < gridSize; col++) {
+                    const gridItem = document.createElement('div');
+                    gridItem.className = 'grid-item';
+                    gridItem.setAttribute('data-x', col);
+                    gridItem.setAttribute('data-y', row);
+                    
+                    const coords = document.createElement('div');
+                    coords.className = 'coordinates';
+                    coords.textContent = `${col},${row}`;
+                    gridItem.appendChild(coords);
+
+                    gridItem.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        showCellInfo(col, row);
+                    });
+
+                    mapGrid.appendChild(gridItem);
+                }
+            }
+        }
+
+        function toggleMenu() {
+            const menu = document.getElementById('menuOverlay');
+            menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function showCellInfo(x, y) {
+            document.getElementById('cellCoords').textContent = `X:${x}, Y:${y}`;
+            document.getElementById('infoOverlay').style.display = 'flex';
+        }
+
+        function closeInfo() {
+            document.getElementById('infoOverlay').style.display = 'none';
+        }
+
+        document.getElementById('discordButton').addEventListener('click', () => {
+            window.location.href = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${DISCORD_REDIRECT_URI}&response_type=token&scope=${DISCORD_SCOPE}`;
+        });
+
+        // Инициализация
+        initGrid();
+        centerMap();
+        document.getElementById('menuButton').addEventListener('click', toggleMenu);
+        document.getElementById('themeButton').addEventListener('click', toggleTheme);
+        document.getElementById('resetButton').addEventListener('click', centerMap);
+
+        function toggleTheme() {
+            document.body.classList.toggle('dark');
+            document.getElementById('themeButton').textContent = 
+                document.body.classList.contains('dark') ? 'Светлый фон' : 'Тёмный фон';
+        }
+
+        // Логика карты
+        mapContainer.addEventListener('wheel', handleZoom);
+        mapContainer.addEventListener('mousedown', startDragging);
+        document.addEventListener('mousemove', dragMap);
+        document.addEventListener('mouseup', stopDragging);
+        mapContainer.addEventListener('dblclick', centerMap);
+
+        function handleZoom(e) {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            const rect = mapContainer.getBoundingClientRect();
+            
+            const mouseX = (e.clientX - rect.left - posX) / scale;
+            const mouseY = (e.clientY - rect.top - posY) / scale;
+
+            const newScale = Math.min(Math.max(scale * delta, minScale), maxScale);
+            scale = newScale;
+
+            posX = e.clientX - rect.left - mouseX * scale;
+            posY = e.clientY - rect.top - mouseY * scale;
+
+            applyBounds();
+            updateTransform();
+        }
+
+        function startDragging(e) {
+            if (e.button !== 0) return;
+            isDragging = true;
+            startX = e.clientX - posX * scale;
+            startY = e.clientY - posY * scale;
+            mapContainer.classList.add('grabbing');
+            e.preventDefault();
+        }
+
+        function dragMap(e) {
+            if (!isDragging) return;
+            posX = (e.clientX - startX) / scale;
+            posY = (e.clientY - startY) / scale;
+            applyBounds();
+            updateTransform();
+        }
+
+        function stopDragging() {
+            isDragging = false;
+            mapContainer.classList.remove('grabbing');
+        }
+
+        function updateTransform() {
+            mapGrid.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        }
+
+        function applyBounds() {
+            const scaledWidth = baseWidth * scale;
+            const scaledHeight = baseHeight * scale;
+            const containerWidth = mapContainer.clientWidth;
+            const containerHeight = mapContainer.clientHeight;
+
+            let minX = containerWidth - scaledWidth;
+            let maxX = 0;
+            let minY = containerHeight - scaledHeight;
+            let maxY = 0;
+
+            const padding = 0.5;
+            minX -= containerWidth * padding;
+            maxX += containerWidth * padding;
+            minY -= containerHeight * padding;
+            maxY += containerHeight * padding;
+
+            posX = Math.min(Math.max(posX, minX), maxX);
+            posY = Math.min(Math.max(posY, minY), maxY);
+        }
+
+        function centerMap() {
+            scale = 1;
+            posX = (mapContainer.clientWidth - baseWidth) / 2;
+            posY = (mapContainer.clientHeight - baseHeight) / 2;
+            applyBounds();
+            updateTransform();
+        }
+
+        window.addEventListener('resize', () => {
+            applyBounds();
+            updateTransform();
+        });
+    </script>
+</body>
+</html>

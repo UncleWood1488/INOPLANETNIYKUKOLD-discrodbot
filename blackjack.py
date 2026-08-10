@@ -1,7 +1,6 @@
 import db
 import random
 import math
-import functions
 
 class blackjack():
     def __init__(self, author, bet: int=0):
@@ -11,7 +10,8 @@ class blackjack():
         self.dealer_hand = []
         self.dealer_msg_val = 0  # Сумма карт дилера, показывающаяся в сообщении
         self.reason = ''
-        db.updatemoney(self.author.id, -self.bet)
+        # Списание ставки при создании игры
+        db.update_balance(self.author.id, -self.bet)
         
         # Раздача карт
         [self._claim_card() for i in range(2)]
@@ -32,16 +32,17 @@ class blackjack():
         if player_sum == 21 and dealer_sum != 21:
             self.reason = 'ftw'  # first turn win
             pay = math.ceil(self.bet * 2.5)  # 2.5x ставка (1.5x выигрыш + возврат ставки)
-            db.updatemoney(self.author.id, pay)
+            db.update_balance(self.author.id, pay)
         elif player_sum == 21 and dealer_sum == 21:
             self.reason = 'tie'  # ничья на первом ходу
-            db.updatemoney(self.author.id, self.bet)  # возврат ставки
+            db.update_balance(self.author.id, self.bet)  # возврат ставки
 
     def _claim_card(self, *, dealer: bool=False):
         cards = ('A', 'K', 'Q', 'J', 10, 9, 8, 7, 6, 5, 4, 3, 2)
         card = random.choice(cards)
         if dealer:
-            functions.log(f'Blackjack {self.author} Dealer {card}', type='debug')
+            # Вместо functions.log можно использовать logger, но для простоты оставим print или удалим
+            # functions.log(f'Blackjack {self.author} Dealer {card}', type='debug')
             return self.dealer_hand.append(card)
         return self.hand.append(card)
 
@@ -127,7 +128,7 @@ class blackjack():
         elif len(self.hand) >= 5 and player_sum <= 21:
             # 5 карт и не перебор - автоматический выигрыш
             self.reason = 'win'
-            db.updatemoney(self.author.id, self.bet * 2)
+            db.update_balance(self.author.id, self.bet * 2)
             
         return self.prepare_message()
 
@@ -144,15 +145,15 @@ class blackjack():
         # Определение результата после хода дилера
         if dealer_sum > 21:
             self.reason = 'win'
-            db.updatemoney(self.author.id, self.bet * 2)
+            db.update_balance(self.author.id, self.bet * 2)
         elif dealer_sum == player_sum:
             self.reason = 'tie'
-            db.updatemoney(self.author.id, self.bet)
+            db.update_balance(self.author.id, self.bet)
         elif dealer_sum > player_sum:
             self.reason = 'lose'
         else:
             self.reason = 'win'
-            db.updatemoney(self.author.id, self.bet * 2)
+            db.update_balance(self.author.id, self.bet * 2)
 
     def stay(self):
         """Игрок останавливается"""
