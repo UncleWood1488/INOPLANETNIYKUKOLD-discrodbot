@@ -1,17 +1,27 @@
 import os
-from random import *
-BOT_TOKEN = os.environ.get('BOT_TOKEN') or "NjAzOTM4OTUzNzQ5NDYzMDUw.GMSDXR.muNRO025JMwNSfi2xY50qqshT9l5KT57P6Kxxw"
-BOT_PREFIX = os.environ.get('BOT_PREFIX') or '.'
+from dotenv import load_dotenv
 
-MOD_ROLE_IDS = [406211889228546048, 406212152316395574]
+load_dotenv()
 
-FFMPEG_PATH = "C:/Users/UncleWood/Desktop/Programming/INOPLANETNIYKUKOLD-discrodbot-main/FFmpeg/bin/ffmpeg.exe"
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN не задан! Проверьте .env файл.")
+
+BOT_PREFIX = os.getenv('BOT_PREFIX', '.')
+
+DATABASE_PATH = os.getenv('DATABASE_PATH', './database/database.db')
+
+FFMPEG_PATH = os.getenv('FFMPEG_PATH', '/usr/bin/ffmpeg')
+if not os.path.exists(FFMPEG_PATH):
+    print(f"⚠️ ВНИМАНИЕ: FFmpeg не найден по пути {FFMPEG_PATH}")
+    print("Установите ffmpeg: sudo apt install ffmpeg  (или укажите путь в .env)")
 
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -nostdin',
     'options': '-vn -sn -dn -ignore_unknown -hide_banner -loglevel error'
 }
 
+MOD_ROLE_IDS = [406211889228546048, 406212152316395574]
 
 cooldown = {
     'work': 60,
@@ -24,7 +34,6 @@ pay = {
 }
 
 multiplier = 1
-
 new_worker_balance = 100
 
 new_fisher = {

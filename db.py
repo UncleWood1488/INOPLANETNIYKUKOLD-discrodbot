@@ -4,21 +4,15 @@ import time
 import random
 from datetime import datetime
 from contextlib import contextmanager
-from config import new_worker_balance, cooldown, new_fisher, MAP_SETTINGS
+from config import new_worker_balance, cooldown, new_fisher, MAP_SETTINGS, DATABASE_PATH
 
-# Настройки пути к БД
-DATABASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database')
-DATABASE_PATH = os.path.join(DATABASE_DIR, 'database.db')
-
-# Создаем папку для БД при необходимости
-os.makedirs(DATABASE_DIR, exist_ok=True)
+os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
 
 def init_db():
     """Инициализация структуры базы данных"""
     with get_connection() as conn:
         cursor = conn.cursor()
         
-        # Создание таблицы users
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -27,14 +21,12 @@ def init_db():
             last_work TEXT
         )""")
         
-        # Создание таблицы coins
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS coins (
             user_id INTEGER PRIMARY KEY,
             coins INTEGER NOT NULL
         )""")
         
-        # Создание таблицы cooldowns
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS cooldowns (
             user_id INTEGER PRIMARY KEY,
@@ -42,7 +34,6 @@ def init_db():
             fishing_cooldown REAL
         )""")
         
-        # Создание таблицы fish
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS fish (
             user_id INTEGER PRIMARY KEY,
@@ -52,7 +43,6 @@ def init_db():
             squid INTEGER DEFAULT 0
         )""")
 
-        # Создание таблицы svo
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS svo (
            user_id INTEGER PRIMARY KEY,
@@ -70,7 +60,6 @@ def init_db():
         )
         """)
 
-        # Создание таблицы map_positions
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS map_positions (
             user_id INTEGER PRIMARY KEY,
@@ -79,7 +68,6 @@ def init_db():
             last_updated TEXT DEFAULT CURRENT_TIMESTAMP
         )""")
         
-        # --- НОВОЕ: таблица апгрейдов ---
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS upgrades (
             user_id INTEGER PRIMARY KEY,
@@ -92,7 +80,6 @@ def init_db():
         
         conn.commit()
 
-# Добавляем столбец lootboxes в таблицу fish, если его нет
 def add_lootbox_column():
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -118,43 +105,35 @@ def get_connection():
 
 # Инициализация БД при первом запуске
 init_db()
-add_lootbox_column()  # Добавляем столбец лутбоксов
+add_lootbox_column()
 
-#-----------------------------------------------------------------------------------ВАЛЮТА
-# Регистрация пользователя
 def register_user(user_id):
     with get_connection() as conn:
-        # Регистрация в users
         conn.execute("""
             INSERT OR IGNORE INTO users (user_id, balance, fishing_level) 
             VALUES (?, ?, ?)
         """, (user_id, new_worker_balance, 1))
         
-        # Регистрация в cooldowns
         conn.execute("""
             INSERT OR IGNORE INTO cooldowns (user_id) 
             VALUES (?)
         """, (user_id,))
         
-        # Регистрация в coins
         conn.execute("""
             INSERT OR IGNORE INTO coins (user_id, coins)
             VALUES (?, ?)
         """, (user_id, 0))
 
-        # Регистрация в fish
         conn.execute("""
             INSERT OR IGNORE INTO fish (user_id) 
             VALUES (?)
         """, (user_id,))
 
-        # Регистрация в map_positions
         conn.execute("""
             INSERT OR IGNORE INTO map_positions (user_id, x, y) 
             VALUES (?, ?, ?)
         """, (user_id, random.randint(0, MAP_SETTINGS['grid_size']-1), random.randint(0, MAP_SETTINGS['grid_size']-1)))
         
-        # --- НОВОЕ: регистрация в upgrades ---
         conn.execute("""
             INSERT OR IGNORE INTO upgrades (user_id) 
             VALUES (?)
@@ -162,7 +141,6 @@ def register_user(user_id):
         
         conn.commit()
         
-# Проверка баланса (старая функция, используется в некоторых местах)
 def is_enought(user_id, need):
     with get_connection() as conn:
         cur = conn.cursor()
@@ -170,7 +148,6 @@ def is_enought(user_id, need):
         s = cur.fetchone()
         return s[0] >= need if s else False
 
-# Получение баланса
 def get_balance(user_id):
     with get_connection() as conn:
         cur = conn.cursor()
@@ -178,7 +155,6 @@ def get_balance(user_id):
         result = cur.fetchone()
         return result[0] if result else 0
 
-# Обновление баланса
 def update_balance(user_id, amount):
     with get_connection() as conn:
         cur = conn.cursor()
@@ -188,8 +164,6 @@ def update_balance(user_id, amount):
         )
         conn.commit()
 
-#-----------------------------------------------------------------------------------КУЛДАУН
-# Проверка существования пользователя
 def is_user_exists(user_id):
     """Проверка существования пользователя"""
     with get_connection() as conn:
@@ -200,7 +174,6 @@ def is_user_exists(user_id):
         )
         return cursor.fetchone() is not None
 
-# Установка кулдауна
 def set_cooldown(user_id: int, action: str, duration: int):
     """Устанавливает кулдаун (время окончания = текущее время + длительность)."""
     action_map = {
@@ -251,7 +224,6 @@ def get_cooldown(user_id: int, action: str) -> float:
     remaining = result[0] - time.time()
     return max(0.0, remaining)
 
-#-----------------------------------------------------------------------------------РЫБАЛКА
 def fishing(user_id: int) -> str:
     """Добавляет случайную рыбу пользователю и возвращает её тип"""
     fish_types = ['cod', 'salmon', 'tropical', 'squid']
@@ -259,9 +231,7 @@ def fishing(user_id: int) -> str:
     
     with get_connection() as conn:
         cursor = conn.cursor()
-        # Создаем запись если не существует
         cursor.execute("INSERT OR IGNORE INTO fish (user_id) VALUES (?)", (user_id,))
-        # Обновляем счетчик
         cursor.execute(
             f"UPDATE fish SET {random_fish} = {random_fish} + 1 WHERE user_id = ?",
             (user_id,)
@@ -300,7 +270,6 @@ def get_fishing_stats(user_id: int) -> dict:
         
     return dict(result)
 
-#-----------------------------------------------------------------------------------ДЕНЬГИ
 def add_money(user_id: int, amount: int):
     if amount < 0:
         raise ValueError("Количество денег не может быть отрицательным.")
@@ -308,13 +277,11 @@ def add_money(user_id: int, amount: int):
     with get_connection() as conn:
         cursor = conn.cursor()
         
-        # Создаем запись в coins, если её нет
         cursor.execute(
             "INSERT OR IGNORE INTO coins (user_id, coins) VALUES (?, 0)",
             (user_id,)
         )
         
-        # Обновляем баланс
         cursor.execute(
             "UPDATE coins SET coins = coins + ? WHERE user_id = ?",
             (amount, user_id)
@@ -328,7 +295,6 @@ def transfer_money(sender_id: int, receiver_id: int, amount: int) -> None:
         try:
             conn.execute("BEGIN TRANSACTION")
             
-            # Проверка баланс
             sender_balance = conn.execute(
                 "SELECT balance FROM users WHERE user_id = ?", 
                 (sender_id,)
@@ -337,13 +303,11 @@ def transfer_money(sender_id: int, receiver_id: int, amount: int) -> None:
             if sender_balance < amount:
                 raise ValueError("Недостаточно средств")
             
-            # Списание
             conn.execute(
                 "UPDATE users SET balance = balance - ? WHERE user_id = ?",
                 (amount, sender_id)
             )
             
-            # Зачисление
             conn.execute(
                 "UPDATE users SET balance = balance + ? WHERE user_id = ?",
                 (amount, receiver_id)
@@ -354,7 +318,6 @@ def transfer_money(sender_id: int, receiver_id: int, amount: int) -> None:
             conn.rollback()
             raise
 
-#-----------------------------------------------------------------------------------КАРТА
 def set_player_position(user_id: int, x: int, y: int):
     """Установить позицию игрока на карте"""
     if x < 0 or x >= MAP_SETTINGS['grid_size'] or y < 0 or y >= MAP_SETTINGS['grid_size']:
@@ -376,7 +339,6 @@ def get_player_position(user_id: int):
         result = cursor.fetchone()
         if result:
             return result[0], result[1]
-        # Если позиции нет, устанавливаем случайную
         x, y = random.randint(0, MAP_SETTINGS['grid_size']-1), random.randint(0, MAP_SETTINGS['grid_size']-1)
         set_player_position(user_id, x, y)
         return x, y
@@ -388,7 +350,6 @@ def get_all_player_positions():
         cursor.execute("SELECT user_id, x, y FROM map_positions")
         return {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
 
-#-----------------------------------------------------------------------------------АПГРЕЙДЫ (НОВОЕ)
 def get_upgrade(user_id: int, upgrade: str) -> int:
     """Возвращает 0 или 1 для конкретного апгрейда"""
     with get_connection() as conn:
@@ -413,8 +374,7 @@ def get_all_upgrades(user_id: int) -> dict:
         if result:
             return dict(result)
         return {'net': 0, 'pro_rod': 0, 'improved_bag': 0, 'golden_pickaxe': 0}
-
-#-----------------------------------------------------------------------------------ЛУТБОКСЫ (НОВОЕ)
+    
 def get_lootboxes(user_id: int) -> int:
     """Возвращает количество лутбоксов у пользователя"""
     with get_connection() as conn:
@@ -456,7 +416,6 @@ def add_fish(user_id: int, fish_type: str, amount: int = 1):
         """, (user_id, amount, amount))
         conn.commit()
 
-# Добавьте в конец db.py для теста
 if __name__ == "__main__":
     with get_connection() as conn:
         cursor = conn.cursor()

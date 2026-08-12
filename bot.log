@@ -1,34 +1,17 @@
-2026-08-10 15:31:45,489:INFO:discord.client: logging in using static token
-2026-08-10 15:31:48,205:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: 2647ce35de3f0c5911d65c99bb9d720e).
-2026-08-10 15:31:50,222:INFO:discord: Проверка зависимостей...
-2026-08-10 15:31:50,232:INFO:discord: [DEPS] yt-dlp version: 2026.7.4
-2026-08-10 15:31:51,720:INFO:discord: [UPDATE] yt-dlp успешно обновлен
-2026-08-10 15:31:52,055:INFO:discord: [NETWORK] YouTube доступен
-2026-08-10 15:31:52,056:INFO:discord: [INIT] Opus библиотека загружена
-2026-08-10 15:31:52,056:INFO:discord: [INIT] Opus библиотека доступна
-2026-08-10 15:31:52,057:INFO:discord: ############################################################
-2026-08-10 15:31:52,058:INFO:discord: *************Logged in as: ИНОПЛАНЕТНЫЙ КУКОЛД**************
-2026-08-10 15:31:52,058:INFO:discord: *****************Bot ID: 603938953749463050*****************
-2026-08-10 15:31:52,058:INFO:discord: ########################USER STATS:#########################
-2026-08-10 15:31:52,058:INFO:discord: ***********************All users: 22************************
-2026-08-10 15:31:52,058:INFO:discord: *************************Online: 4**************************
-2026-08-10 15:31:52,058:INFO:discord: ##################SYNCING SLASH COMMANDS:###################
-2026-08-10 15:31:52,366:INFO:discord: 🍉ИОНОТЕКА🍉: ['play', 'playlist', 'pause', 'resume', 'skip', 'stop', 'loop_queue', 'loop_one', 'queue', 'shuffle', 'check', 'roulette', 'work', 'bj', 'move', 'balance', 'fishing', 'shop', 'help', 'addmoney', 'map', 'mymap', 'setposition', 'position', 'svogamehelp', 'svogameprofile']
-2026-08-10 15:31:52,366:INFO:discord: ***************************Done!****************************
-2026-08-10 15:33:15,185:INFO:discord.voice_state: Connecting to voice...
-2026-08-10 15:33:15,186:INFO:discord.voice_state: Starting voice handshake... (connection attempt 1)
-2026-08-10 15:33:15,490:INFO:discord.voice_state: Voice handshake complete. Endpoint found: c-arn04-5bcac052.discord.media:2083
-2026-08-10 15:33:15,738:INFO:discord.voice_state: Voice connection complete.
-2026-08-10 15:37:34,677:INFO:discord.player: ffmpeg process 2244 successfully terminated with return code of 0.
-2026-08-10 15:41:49,043:INFO:discord.player: ffmpeg process 17236 successfully terminated with return code of 0.
-2026-08-10 15:44:28,190:INFO:discord.player: ffmpeg process 22464 successfully terminated with return code of 0.
-2026-08-10 15:47:58,475:INFO:discord.player: ffmpeg process 6572 successfully terminated with return code of 0.
-2026-08-10 15:50:14,282:INFO:discord.player: ffmpeg process 24332 has not terminated. Waiting to terminate...
-2026-08-10 15:50:14,284:INFO:discord.player: ffmpeg process 24332 should have terminated with a return code of 1.
-2026-08-10 15:50:40,847:INFO:discord.player: ffmpeg process 17536 has not terminated. Waiting to terminate...
-2026-08-10 15:50:40,849:INFO:discord.player: ffmpeg process 17536 should have terminated with a return code of 1.
-2026-08-10 15:50:46,453:INFO:discord.player: ffmpeg process 4292 has not terminated. Waiting to terminate...
-2026-08-10 15:50:46,456:INFO:discord.player: ffmpeg process 4292 should have terminated with a return code of 1.
-2026-08-10 15:54:23,760:INFO:discord.player: ffmpeg process 26356 successfully terminated with return code of 0.
-2026-08-10 15:55:11,505:INFO:discord.player: ffmpeg process 15880 has not terminated. Waiting to terminate...
-2026-08-10 15:55:11,508:INFO:discord.player: ffmpeg process 15880 should have terminated with a return code of 1.
+2026-08-12 05:31:26,167:INFO:discord.client: logging in using static token
+2026-08-12 05:31:27,737:INFO:discord.gateway: Shard ID None has connected to Gateway (Session ID: 1f418a078c811174b09671b5a502c93e).
+2026-08-12 05:31:29,757:INFO:discord: Проверка зависимостей...
+2026-08-12 05:31:29,763:INFO:discord: [DEPS] yt-dlp version: 2026.7.4
+2026-08-12 05:31:30,887:INFO:discord: [UPDATE] yt-dlp успешно обновлен
+2026-08-12 05:31:31,072:INFO:discord: [NETWORK] YouTube доступен
+2026-08-12 05:31:31,073:INFO:discord: [INIT] Opus библиотека загружена
+2026-08-12 05:31:31,073:INFO:discord: [INIT] Opus библиотека доступна
+2026-08-12 05:31:31,073:INFO:discord: ############################################################
+2026-08-12 05:31:31,074:INFO:discord: *************Logged in as: ИНОПЛАНЕТНЫЙ КУКОЛД**************
+2026-08-12 05:31:31,074:INFO:discord: *****************Bot ID: 603938953749463050*****************
+2026-08-12 05:31:31,074:INFO:discord: ########################USER STATS:#########################
+2026-08-12 05:31:31,074:INFO:discord: ***********************All users: 22************************
+2026-08-12 05:31:31,074:INFO:discord: *************************Online: 5**************************
+2026-08-12 05:31:31,074:INFO:discord: ##################SYNCING SLASH COMMANDS:###################
+2026-08-12 05:31:31,310:INFO:discord: 🍉ИОНОТЕКА🍉: ['play', 'playlist', 'pause', 'resume', 'skip', 'stop', 'loop_queue', 'loop_one', 'queue', 'shuffle', 'check', 'roulette', 'work', 'bj', 'move', 'balance', 'fishing', 'shop', 'help', 'addmoney', 'map', 'mymap', 'setposition', 'position', 'svogamehelp', 'svogameprofile']
+2026-08-12 05:31:31,310:INFO:discord: ***************************Done!****************************
