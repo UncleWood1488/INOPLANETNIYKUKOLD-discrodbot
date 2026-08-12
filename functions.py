@@ -35,7 +35,6 @@ def log(message: str, type: str = 'info'):
     else:
         logger.info(message)
 
-# Утилиты
 def get_online_members(bot):
     return [m.name for m in bot.get_all_members() if m.status != discord.Status.offline]
 
@@ -45,7 +44,6 @@ def replace_mention(message):
         f'@{message.mentions[0].name}'
     ) if message.mentions else message.content
 
-# Админские команды
 async def move(ctx, members):
     role_names = [ctx.guild.get_role(role_id).name for role_id in MOD_ROLE_IDS]
     if not any(role.id in MOD_ROLE_IDS for role in ctx.author.roles) and not ctx.author.guild_permissions.move_members:
@@ -79,9 +77,7 @@ async def addmoney(ctx, member: discord.Member, coins: int):
         logger.error(f"[DB] Ошибка: {str(e)}")
         await ctx.reply("⚠️ Ошибка базы данных", ephemeral=True)
 
-# Функции карты
 async def show_full_map(ctx):
-    """Показать полную карту игры"""
     try:
         embed, file = await generate_full_map_embed()
         await ctx.reply(embed=embed, file=file)
@@ -90,7 +86,6 @@ async def show_full_map(ctx):
         await ctx.reply("❌ Ошибка генерации карты", ephemeral=True)
 
 async def show_player_map(ctx):
-    """Показать карту вокруг игрока"""
     try:
         embed, file = await generate_player_map_embed(ctx.author.id, ctx.author.display_name)
         await ctx.reply(embed=embed, file=file)
@@ -99,7 +94,6 @@ async def show_player_map(ctx):
         await ctx.reply("❌ Ошибка генерации карты", ephemeral=True)
 
 async def set_position(ctx, x: int, y: int):
-    """Установить позицию игрока на карте"""
     try:
         if x < 0 or x >= MAP_SETTINGS['grid_size'] or y < 0 or y >= MAP_SETTINGS['grid_size']:
             await ctx.reply(f"❌ Координаты должны быть от 0 до {MAP_SETTINGS['grid_size']-1}", ephemeral=True)
@@ -112,7 +106,6 @@ async def set_position(ctx, x: int, y: int):
         await ctx.reply("❌ Ошибка установки позиции", ephemeral=True)
 
 async def show_position(ctx):
-    """Показать текущую позицию игрока"""
     try:
         x, y = db.get_player_position(ctx.author.id)
         embed = discord.Embed(
@@ -128,7 +121,6 @@ async def show_position(ctx):
         logger.error(f"[POSITION] Ошибка: {str(e)}")
         await ctx.reply("❌ Ошибка получения позиции", ephemeral=True)
 
-# Экономика
 async def balance(ctx):
     try:
         balance = db.get_balance(ctx.author.id)
@@ -173,7 +165,6 @@ async def work(ctx):
         await ctx.reply("⚠️ Ошибка выполнения работы", ephemeral=True)
 
 async def shop(ctx):
-    """Открыть магазин"""
     try:
         user_id = ctx.author.id
         if not db.is_user_exists(user_id):
@@ -191,32 +182,21 @@ async def shop(ctx):
         logger.error(f"[SHOP] Ошибка: {str(e)}")
         await ctx.reply("⚠️ Ошибка открытия магазина", ephemeral=True)
 
-# Мини-игры
 async def bj(ctx, bet: int):
-    """
-    Игра в Blackjack.
-    Исправлена проверка баланса: теперь используется прямое сравнение,
-    добавлено логирование, проверка на положительную ставку,
-    корректное удаление игрока из bjplayers.
-    """
-    game = None  # для отслеживания создания игры
+    game = None
     try:
-        # Проверка, не в игре ли уже пользователь
         if ctx.author.id in bjplayers:
             return await ctx.reply("⚠️ Вы уже в игре!", ephemeral=True)
         
-        # Проверка на положительную ставку
         if bet <= 0:
             return await ctx.reply("❌ Ставка должна быть положительной!", ephemeral=True)
 
-        # Получаем баланс напрямую (избегаем возможной ошибки в db.is_enought)
         balance = db.get_balance(ctx.author.id)
         logger.debug(f"[BJ] User {ctx.author.id} balance: {balance}, bet: {bet}")
 
         if balance < bet:
             return await ctx.reply("❌ Недостаточно средств!", ephemeral=True)
 
-        # Создаём игру (конструктор списывает ставку)
         game = blackjack(ctx.author, bet)
         bjplayers[ctx.author.id] = game
         view = await buttons.bj_buttons(ctx, bjplayers)
@@ -226,9 +206,6 @@ async def bj(ctx, bet: int):
         logger.error(f"[BJ] Ошибка: {str(e)}")
         await ctx.reply("⚠️ Ошибка запуска игры", ephemeral=True)
     finally:
-        # Если игра не была создана (исключение произошло до добавления в bjplayers),
-        # но запись всё же есть (например, из-за предыдущей ошибки) — удаляем.
-        # Используем проверку: если game is None, значит создание не завершилось.
         if game is None and ctx.author.id in bjplayers:
             del bjplayers[ctx.author.id]
 
@@ -245,11 +222,9 @@ async def fishing(ctx):
             cd = f"{int(remaining // 60)} мин. {int(remaining % 60)} сек."
             return await ctx.reply(f"⏳ Кулдаун: {cd}", ephemeral=True)
 
-        # Ловим рыбу
         caught_fish = db.fishing(user_id)
         db.set_cooldown(user_id, 'fishing', cooldown['fishing'])
         
-        # Проверяем шанс выпадения лутбокса
         lootbox_message = ""
         import random
         if random.random() < LOOTBOX['drop_chance']:
@@ -270,29 +245,21 @@ async def fishing(ctx):
         await ctx.reply("🎣 Ошибка рыбалки", ephemeral=True)
 
 async def open_lootbox(user_id: int):
-    """
-    Открывает один лутбокс, начисляет награду.
-    Возвращает кортеж (успех: bool, сообщение: str)
-    """
     from config import LOOTBOX, fish_data
     import random
 
-    # Проверяем наличие лутбоксов
     lootboxes = db.get_lootboxes(user_id)
     if lootboxes <= 0:
         return False, "У вас нет лутбоксов!"
 
-    # Уменьшаем количество
     db.remove_lootbox(user_id, 1)
 
-    # Выбираем тип награды по весам
     reward_type = random.choices(
         population=list(LOOTBOX['reward_weights'].keys()),
         weights=list(LOOTBOX['reward_weights'].values())
     )[0]
 
     if reward_type == 'fish':
-        # Выбираем случайный вид рыбы
         fish_type = random.choice(['cod', 'salmon', 'tropical', 'squid'])
         min_q, max_q = LOOTBOX['rewards']['fish'][fish_type]
         amount = random.randint(min_q, max_q)
@@ -302,13 +269,12 @@ async def open_lootbox(user_id: int):
         fish_emoji = fish_data[fish_type]['emoji']
         return True, f"Вы получили {fish_emoji} **{fish_name}** x{amount}!"
 
-    else:  # coins
+    else:
         min_c, max_c = LOOTBOX['rewards']['coins']
         amount = random.randint(min_c, max_c)
         db.add_money(user_id, amount)
         return True, f"Вы получили {amount} скуфкоинов {SKUFCOIN_EMOJI}!"
 
-# Хелперы
 async def help(ctx):
     emb = discord.Embed(
         title="📚 Помощь",
@@ -335,7 +301,6 @@ async def help(ctx):
     await ctx.reply(embed=emb, ephemeral=True)
 
 async def svogamehelp(ctx):
-    """Помощь по игре СВО"""
     embed = discord.Embed(
         title="🎮 Помощь по игре 'Специальная Военная Операция'",
         color=discord.Color.dark_green(),
@@ -354,7 +319,6 @@ async def svogamehelp(ctx):
     await ctx.reply(embed=embed, ephemeral=True)
 
 async def svogameprofile(ctx):
-    """Показать профиль СВО"""
     try:
         with db.get_connection() as conn:
             cursor = conn.cursor()

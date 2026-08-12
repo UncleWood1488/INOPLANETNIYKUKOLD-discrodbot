@@ -4,17 +4,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Добавьте в начало файла проверку на случай отсутствия emoji
 try:
     from emoji import *
 except ImportError:
-    # Значения по умолчанию если модуль emoji недоступен
     SPEAKER_EMOJI = "🔊"
     CLOCK_EMOJI = "⏰"
     LOGO_EMOJI = "👤"
 
 def format_duration(seconds):
-    """Преобразует секунды в формат ММ:СС или ЧЧ:ММ:СС"""
     if not seconds or seconds < 0:
         return "N/A"
     
@@ -38,9 +35,7 @@ class MusicControls(discord.ui.View):
         self.logger = logging.getLogger(__name__)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Проверка перед выполнением взаимодействия"""
         try:
-            # Проверка кулдауна (3 секунды)
             user_id = interaction.user.id
             current_time = discord.utils.utcnow().timestamp()
             
@@ -54,7 +49,6 @@ class MusicControls(discord.ui.View):
             
             self.cooldowns[user_id] = current_time
 
-            # Проверка что пользователь в голосовом канале
             if not interaction.user.voice:
                 await interaction.response.send_message(
                     "🔇 Вы должны быть в голосовом канале!", 
@@ -62,7 +56,6 @@ class MusicControls(discord.ui.View):
                 )
                 return False
 
-            # Проверка что бот в том же канале
             voice_client = interaction.guild.voice_client
             if not voice_client or not voice_client.is_connected():
                 await interaction.response.send_message(
@@ -137,7 +130,6 @@ class MusicControls(discord.ui.View):
     async def stop(self, interaction: discord.Interaction, button: discord.ui.Button):
         voice_client = interaction.guild.voice_client
         if voice_client and voice_client.is_connected():
-            # Очищаем очередь и сбрасываем режимы повтора
             from musicplayer import music_players
             if interaction.guild.id in music_players:
                 async with music_players[interaction.guild.id]['lock']:
@@ -220,14 +212,12 @@ class MusicControls(discord.ui.View):
             await interaction.response.send_message("⚠️ Очередь пуста", ephemeral=True)
 
 class QueueView(discord.ui.View):
-    """View только для просмотра очереди с кнопкой обновления"""
     def __init__(self, guild_id):
         super().__init__(timeout=60)
         self.guild_id = guild_id
 
     @discord.ui.button(emoji="🔄", style=discord.ButtonStyle.primary)
     async def refresh_queue(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Обновить вид очереди"""
         from musicplayer import music_players
         
         guild_id = interaction.guild.id
@@ -237,20 +227,17 @@ class QueueView(discord.ui.View):
             current_track = music_players[guild_id]['current_track']
             embed = queue_embed(queue, loop_mode, current_track)
             
-            # Обновляем сообщение
             await interaction.response.edit_message(embed=embed, view=self)
         else:
             await interaction.response.send_message("⚠️ Очередь пуста", ephemeral=True)
 
 def now_playing_embed(title, url, duration, author, thumbnail, guild_id, added_by, loop_mode='none', queue_length=0):
-    """Создание embed для текущего трека"""
     embed = discord.Embed(
         title=f'{SPEAKER_EMOJI} Сейчас играет',
         description=f"[{title}]({url})",
         color=discord.Color.green()
     )
     
-    # Основная информация
     embed.add_field(
         name=f'{CLOCK_EMOJI} Длительность', 
         value=f'`{format_duration(duration)}`', 
@@ -267,7 +254,6 @@ def now_playing_embed(title, url, duration, author, thumbnail, guild_id, added_b
         inline=True
     )
     
-    # Информация о режиме повтора
     loop_status = {
         'none': '❌ Выключен',
         'queue': '🔁 Плейлист',
@@ -279,7 +265,6 @@ def now_playing_embed(title, url, duration, author, thumbnail, guild_id, added_b
         inline=True
     )
     
-    # Кто добавил трек
     embed.add_field(
         name='👤 Добавил',
         value=f'<@{added_by}>',
@@ -295,13 +280,11 @@ def now_playing_embed(title, url, duration, author, thumbnail, guild_id, added_b
     return embed, view
 
 def queue_embed(queue, loop_mode='none', current_track=None):
-    """Создание embed для очереди"""
     embed = discord.Embed(
         title=f"📋 Очередь треков [{len(queue)}]",
         color=discord.Color.blue()
     )
     
-    # Добавляем информацию о режиме повтора
     loop_status = {
         'none': 'Выключен',
         'queue': '🔁 Плейлист',
@@ -313,7 +296,6 @@ def queue_embed(queue, loop_mode='none', current_track=None):
         inline=False
     )
     
-    # Добавляем текущий трек в начало очереди
     if current_track:
         embed.add_field(
             name="🎵 Сейчас играет",
@@ -335,7 +317,6 @@ def queue_embed(queue, loop_mode='none', current_track=None):
             )
             entries.append(entry)
         
-        # Статистика очереди
         total_duration = sum(item['duration'] for item in queue)
         embed.add_field(
             name="📊 Статистика очереди",
@@ -357,7 +338,6 @@ def queue_embed(queue, loop_mode='none', current_track=None):
     return embed
 
 def empty_queue_embed():
-    """Embed для пустой очереди"""
     embed = discord.Embed(
         title="📋 Очередь треков",
         description="🎵 Очередь пуста! Добавьте треки командой `/play`",
@@ -383,7 +363,6 @@ def error_embed(message):
     )
 
 def success_embed(title, message):
-    """Embed для успешных операций"""
     return discord.Embed(
         title=f"✅ {title}",
         description=message,
@@ -391,7 +370,6 @@ def success_embed(title, message):
     )
 
 def warning_embed(title, message):
-    """Embed для предупреждений"""
     return discord.Embed(
         title=f"⚠️ {title}",
         description=message,
@@ -399,7 +377,6 @@ def warning_embed(title, message):
     )
 
 def info_embed(title, message):
-    """Embed для информационных сообщений"""
     return discord.Embed(
         title=f"ℹ️ {title}",
         description=message,

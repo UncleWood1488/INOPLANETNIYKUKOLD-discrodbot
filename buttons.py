@@ -1,6 +1,5 @@
 import discord
 
-#region БЛЕКДЖЕК
 async def bj_buttons(ctx, bjplayers):
     async def button_hit_callback(interaction):
         if ctx.author.id != interaction.user.id:
@@ -13,10 +12,8 @@ async def bj_buttons(ctx, bjplayers):
         
         msg = game.hit()
         if game.is_playing():
-            # игра продолжается, кнопки остаются
             await interaction.response.edit_message(content=msg)
         else:
-            # игра завершена, убираем кнопки и удаляем игрока
             del bjplayers[interaction.user.id]
             await interaction.response.edit_message(content=msg, view=None)
 
@@ -54,9 +51,7 @@ async def bj_buttons(ctx, bjplayers):
     view.add_item(button_stay)
 
     return view
-#endregion
 
-#region ЗМЕЙКА
 async def snake_buttons(ctx, snakeplayers):
     async def button_up_callback(interaction):
         if ctx.author.id != interaction.user.id:
@@ -154,4 +149,3 @@ async def snake_buttons(ctx, snakeplayers):
     view.add_item(button_right)
 
     return view
-#endregion

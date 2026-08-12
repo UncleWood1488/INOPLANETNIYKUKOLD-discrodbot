@@ -8,7 +8,7 @@ from db import (
 from config import fish_data
 from embedshop import create_category_embed, create_main_embed, create_sell_fish_embed, FISH_PRICES
 from threading import Lock
-import functions  # для вызова open_lootbox
+import functions
 
 sell_lock = Lock()
 
@@ -23,7 +23,6 @@ class SellFishButton(discord.ui.Button):
     async def callback(self, interaction: Interaction):
         with sell_lock:
             fish_stats = get_fishing_stats(interaction.user.id)
-            # Исключаем лутбоксы из подсчёта
             fish_only = {k: v for k, v in fish_stats.items() if k in FISH_PRICES}
             total = sum(count * FISH_PRICES[fish] for fish, count in fish_only.items())
         
@@ -34,7 +33,6 @@ class SellFishButton(discord.ui.Button):
         update_balance(interaction.user.id, total)
         sellfish(interaction.user.id)
         
-        # Обновляем отображение
         embed = create_sell_fish_embed(interaction.user)
         await interaction.response.edit_message(embed=embed, view=self.view)
 
@@ -43,7 +41,7 @@ class ShopView(View):
     def __init__(self, user):
         super().__init__(timeout=30)
         self.user = user
-        self.current_page = 0  # 0 - главная, 1 - рыбалка, 2 - улучшения, 3 - продажа
+        self.current_page = 0
         self.message = None
         self.rebuild_view(self.current_page)
 
@@ -51,41 +49,33 @@ class ShopView(View):
         self.clear_items()
         self.current_page = page
 
-        # Кнопки категорий (всегда наверху, row=0)
         self.add_item(self.create_fishing_button())
         self.add_item(self.create_upgrades_button())
         self.add_item(self.create_sell_button())
-        self.add_item(self.create_lootbox_button())  # Новая кнопка
+        self.add_item(self.create_lootbox_button())
 
-        # Кнопка закрыть (всегда, row=1)
         self.add_item(self.create_close_button())
 
-        # Кнопка "Назад" только если не главная (row=1)
         if page != 0:
             self.add_item(self.create_back_button())
 
-        # Кнопки в зависимости от страницы
-        if page == 1:  # Рыболовные товары
+        if page == 1:
             upgrades = get_all_upgrades(self.user.id)
-            # Два активных апгрейда
             self.add_item(self.create_upgrade_button('net', 'Сеть', 500, upgrades.get('net', 0)))
             self.add_item(self.create_upgrade_button('pro_rod', 'Удочка PRO', 1000, upgrades.get('pro_rod', 0)))
-            # Две заглушки
             self.add_item(self.create_placeholder_button('Заглушка 1'))
             self.add_item(self.create_placeholder_button('Заглушка 2'))
 
-        elif page == 2:  # Улучшения
+        elif page == 2:
             upgrades = get_all_upgrades(self.user.id)
             self.add_item(self.create_upgrade_button('improved_bag', 'Улучшенная сумка', 750, upgrades.get('improved_bag', 0)))
             self.add_item(self.create_upgrade_button('golden_pickaxe', 'Золотая кирка', 1500, upgrades.get('golden_pickaxe', 0)))
-            # Две заглушки
             self.add_item(self.create_placeholder_button('Заглушка 3'))
             self.add_item(self.create_placeholder_button('Заглушка 4'))
 
-        elif page == 3:  # Продажа рыбы
+        elif page == 3:
             self.add_item(SellFishButton())
 
-    # ----- Создание кнопок -----
     def create_fishing_button(self):
         button = Button(label="Рыбалка 🎣", style=discord.ButtonStyle.primary, row=0)
         async def callback(interaction):
@@ -113,7 +103,6 @@ class ShopView(View):
         async def callback(interaction):
             if interaction.user.id != self.user.id:
                 return await interaction.response.defer()
-            # Проверим, есть ли рыба
             fish_stats = get_fishing_stats(self.user.id)
             fish_only = {k: v for k, v in fish_stats.items() if k in FISH_PRICES}
             if sum(fish_only.values()) == 0:
@@ -125,27 +114,22 @@ class ShopView(View):
         button.callback = callback
         return button
 
-    # Новая кнопка для открытия лутбокса
     def create_lootbox_button(self):
         button = Button(label="Открыть лутбокс 📦", style=discord.ButtonStyle.blurple, row=0)
         async def callback(interaction):
             if interaction.user.id != self.user.id:
                 return await interaction.response.defer()
             
-            # Проверяем наличие лутбоксов
             lootboxes = get_lootboxes(self.user.id)
             if lootboxes <= 0:
                 await interaction.response.send_message("У вас нет лутбоксов!", ephemeral=True)
                 return
             
-            # Открываем лутбокс
             success, message = await functions.open_lootbox(self.user.id)
             if success:
-                # Возвращаемся на главную страницу, чтобы обновить количество лутбоксов
                 self.rebuild_view(0)
                 embed = create_main_embed(self.user)
                 await interaction.response.edit_message(embed=embed, view=self)
-                # Отправляем результат открытия в отдельном сообщении
                 await interaction.followup.send(f"📦 Результат: {message}", ephemeral=True)
             else:
                 await interaction.response.send_message(message, ephemeral=True)
@@ -198,20 +182,16 @@ class ShopView(View):
         if interaction.user.id != self.user.id:
             return await interaction.response.defer()
 
-        # Проверка баланса
         balance = get_balance(self.user.id)
         if balance < price:
             return await interaction.response.send_message("❌ Недостаточно средств!", ephemeral=True)
 
-        # Проверка, не куплен ли уже (на случай двойного нажатия)
         if get_upgrade(self.user.id, upgrade_name) == 1:
             return await interaction.response.send_message("❌ Апгрейд уже куплен!", ephemeral=True)
 
-        # Списание и установка
         update_balance(self.user.id, -price)
         set_upgrade(self.user.id, upgrade_name, 1)
 
-        # Перестраиваем текущую страницу
         self.rebuild_view(self.current_page)
         embed = create_category_embed(self.user, self.current_page)
         await interaction.response.edit_message(embed=embed, view=self)

@@ -3,7 +3,6 @@ import discord
 from config import MAP_SETTINGS
 from db import get_all_player_positions, get_player_position
 
-# Проверяем доступность PIL
 try:
     from PIL import Image, ImageDraw, ImageFont
     PIL_AVAILABLE = True
@@ -21,7 +20,6 @@ class MapGenerator:
         self.view_radius = MAP_SETTINGS['view_radius']
     
     def generate_full_map(self, player_positions=None):
-        """Генерация полной карты"""
         if not PIL_AVAILABLE:
             raise RuntimeError("Pillow не установлен")
             
@@ -29,19 +27,14 @@ class MapGenerator:
         img = Image.new('RGB', (img_size, img_size), color='white')
         draw = ImageDraw.Draw(img)
         
-        # Рисуем сетку
         for i in range(self.grid_size + 1):
-            # Вертикальные линии
             draw.line([(i * self.cell_size, 0), (i * self.cell_size, img_size)], fill='gray', width=1)
-            # Горизонтальные линии
             draw.line([(0, i * self.cell_size), (img_size, i * self.cell_size)], fill='gray', width=1)
             
-            # Подписи координат
             if i % 5 == 0:
                 draw.text((i * self.cell_size + 2, 2), str(i), fill='black')
                 draw.text((2, i * self.cell_size + 2), str(i), fill='black')
         
-        # Отмечаем позиции игроков
         if player_positions:
             for player_id, (x, y) in player_positions.items():
                 center_x = x * self.cell_size + self.cell_size // 2
@@ -55,7 +48,6 @@ class MapGenerator:
         return img
     
     def generate_player_view(self, player_x, player_y, view_radius=None):
-        """Генерация вида вокруг игрока"""
         if not PIL_AVAILABLE:
             raise RuntimeError("Pillow не установлен")
             
@@ -68,19 +60,16 @@ class MapGenerator:
         img = Image.new('RGB', (img_size, img_size), color='white')
         draw = ImageDraw.Draw(img)
         
-        # Рисуем видимую область
         for dx in range(-view_radius, view_radius + 1):
             for dy in range(-view_radius, view_radius + 1):
                 grid_x = player_x + dx
                 grid_y = player_y + dy
                 
-                # Проверяем границы карты
                 if 0 <= grid_x < self.grid_size and 0 <= grid_y < self.grid_size:
                     cell_color = 'lightblue' if (grid_x + grid_y) % 2 == 0 else 'white'
                 else:
                     cell_color = 'darkgray'
                 
-                # Рисуем клетку
                 x1 = (dx + view_radius) * self.cell_size
                 y1 = (dy + view_radius) * self.cell_size
                 x2 = x1 + self.cell_size
@@ -88,18 +77,15 @@ class MapGenerator:
                 
                 draw.rectangle([x1, y1, x2, y2], fill=cell_color, outline='gray')
                 
-                # Подпись координат для центральной клетки
                 if dx == 0 and dy == 0:
                     draw.text((x1 + 2, y1 + 2), f"{grid_x},{grid_y}", fill='black')
         
-        # Рисуем игрока в центре
         center = img_size // 2
         draw.ellipse([
             center - 8, center - 8,
             center + 8, center + 8
         ], fill='red')
         
-        # Добавляем компас
         draw.text((10, 10), "N", fill='black')
         draw.text((img_size - 15, 10), "E", fill='black')
         draw.text((10, img_size - 20), "W", fill='black')
@@ -108,17 +94,14 @@ class MapGenerator:
         return img
 
     def image_to_file(self, image, filename="map.png"):
-        """Конвертирует PIL Image в discord.File"""
         img_bytes = io.BytesIO()
         image.save(img_bytes, format='PNG')
         img_bytes.seek(0)
         return discord.File(img_bytes, filename=filename)
 
-# Глобальный экземпляр генератора карт (создаем только если PIL доступен)
 map_generator = MapGenerator() if PIL_AVAILABLE else None
 
 async def generate_full_map_embed():
-    """Генерирует embed с полной картой"""
     if not PIL_AVAILABLE:
         embed = discord.Embed(
             title="❌ Функция карты недоступна",
@@ -154,7 +137,6 @@ async def generate_full_map_embed():
         return embed, None
 
 async def generate_player_map_embed(user_id, user_name):
-    """Генерирует embed с картой вокруг игрока"""
     if not PIL_AVAILABLE:
         embed = discord.Embed(
             title="❌ Функция карты недоступна",

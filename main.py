@@ -16,18 +16,15 @@ from functions import log, get_online_members, replace_mention
 from emoji import *
 from random import choice
 
-# Настройка логирования
 logger = logging.getLogger("discord")
 logger.setLevel(logging.INFO)
 
-# Очистка логов
 if os.path.exists("bot.log"):
     try:
         os.remove("bot.log")
     except Exception as e:
         print(f"Ошибка при удаления bot.log: {e}")
 
-# Обработчики
 file_handler = logging.FileHandler(filename="bot.log", encoding="utf-8", mode="w")
 file_handler.setFormatter(logging.Formatter("%(asctime)s:%(levelname)s:%(name)s: %(message)s"))
 
@@ -41,15 +38,12 @@ intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=BOT_PREFIX, intents=intents)
 bot.remove_command('help')
 
-# Setup the bot in modules
 functions.setup_bot(bot)
 musicplayer.setup_bot(bot)
 
-# Список разрешенных каналов для музыкальных команд
-ALLOWED_CHANNEL_IDS = [898603315372363797, 550857202139791362]  # Замените на реальные ID каналов
+ALLOWED_CHANNEL_IDS = [898603315372363797, 550857202139791362]
 
 async def check_music_channel(interaction: discord.Interaction) -> bool:
-    """Проверка разрешенного канала для музыкальных команд"""
     if interaction.channel_id not in ALLOWED_CHANNEL_IDS:
         await interaction.response.send_message(
             "❌ Эта команда недоступна в данном канале!", 
@@ -59,7 +53,6 @@ async def check_music_channel(interaction: discord.Interaction) -> bool:
     return True
 
 def update_yt_dlp():
-    """Автоматическое обновление yt-dlp"""
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"])
         logger.info("[UPDATE] yt-dlp успешно обновлен")
@@ -69,14 +62,11 @@ def update_yt_dlp():
         return False
 
 def check_dependencies():
-    # --- ИСПРАВЛЕНИЕ: Замена pkg_resources ---
     try:
-        # Используем importlib.metadata для получения версии пакета
         from importlib.metadata import version, PackageNotFoundError
         yt_dlp_version = version("yt-dlp")
         logger.info(f"[DEPS] yt-dlp version: {yt_dlp_version}")
     except ImportError:
-        # На случай, если importlib.metadata недоступен (Python < 3.8 без backport)
         logger.warning("[DEPS] Не удалось проверить версию yt-dlp: importlib.metadata недоступен")
     except PackageNotFoundError:
         logger.warning("[DEPS] yt-dlp не установлен")
@@ -84,12 +74,10 @@ def check_dependencies():
         logger.warning(f"[DEPS] Не удалось проверить версию yt-dlp: {e}")
 
 def check_youtube_access():
-    """Проверка доступности YouTube"""
     import urllib.request
     import socket
     try:
         socket.setdefaulttimeout(10)
-        # --- ИСПРАВЛЕНИЕ: Исправлена опечатка в URL ---
         urllib.request.urlopen('https://www.youtube.com', timeout=10)
         logger.info("[NETWORK] YouTube доступен")
         return True
@@ -99,30 +87,20 @@ def check_youtube_access():
 
 @bot.event
 async def on_ready():    
-    # Проверка и обновление зависимостей
     logger.info("Проверка зависимостей...")
     check_dependencies()
     update_yt_dlp()
     
-    # Проверка сети
     if not check_youtube_access():
         logger.error("ВНИМАНИЕ: Нет доступа к YouTube. Музыкальные функции могут не работать.")
     
-    # Проверка Opus
     if not discord.opus.is_loaded():
         try:
-            # --- ИСПРАВЛЕНИЕ: Уточнение пути к opus, если необходимо ---
-            # Если у вас есть конкретный файл opus.dll, укажите его путь
-            # discord.opus.load_opus('path/to/your/libopus-0.dll')
-            discord.opus.load_opus('opus') # Или 'libopus-0.dll' на Windows, если он не найден как 'opus'
+            discord.opus.load_opus('opus')
             logger.info("[INIT] Opus библиотека загружена")
         except OSError as e:
             logger.warning(f"[INIT] Не удалось загрузить Opus из 'opus': {e}")
-            # Попробуем стандартный способ
             try:
-                # discord.py может попытаться найти opus автоматически
-                # Этот блок может быть избыточным, но оставлен для ясности
-                # Discord.py обычно сам ищет opus в системе
                 pass
             except Exception as auto_load_e:
                  logger.warning(f"[INIT] Автоматическая загрузка Opus не удалась: {auto_load_e}")
@@ -134,7 +112,6 @@ async def on_ready():
     else:
         logger.warning("[INIT] Opus библиотека не загружена - аудио может не работать")
     
-    # Запускаем фоновые задачи
     await start_background_tasks()
     
     await bot.change_presence(activity=discord.Activity(
@@ -158,24 +135,20 @@ async def on_ready():
     logger.info('{0:*^60}'.format('Done!'))
 
 async def start_background_tasks():
-    """Запуск фоновых задач"""
     bot.loop.create_task(cleanup_task())
 
 async def cleanup_task():
-    """Задача периодической очистки"""
     await bot.wait_until_ready()
     while not bot.is_closed():
         try:
-            # Очистка неактивных музыкальных плееров
             await musicplayer.cleanup_inactive_players()
         except Exception as e:
             logger.error(f"[CLEANUP TASK] Ошибка: {e}")
-        await asyncio.sleep(300)  # Проверка каждые 5 минут
+        await asyncio.sleep(300)
 
 @bot.event
 async def on_voice_state_update(member, before, after):
     try:
-        # Пропускаем если это не наш бот
         if member.id != bot.user.id:
             return
             
@@ -183,7 +156,6 @@ async def on_voice_state_update(member, before, after):
         if not guild:
             return
             
-        # Если бот отключился
         if not after.channel:
             await asyncio.sleep(1)
             if guild.id in musicplayer.music_players:
@@ -222,7 +194,6 @@ async def on_command_error(ctx, error):
     except discord.errors.NotFound:
         pass
 
-# Музыкальные команды (теперь используют musicplayer)
 @bot.tree.command(name="play", description="Воспроизвести трек")
 @app_commands.describe(query="Название или URL трека")
 @app_commands.check(check_music_channel)
@@ -275,7 +246,6 @@ async def queue_command(interaction: discord.Interaction):
 async def shuffle_command(interaction: discord.Interaction):
     await musicplayer.shuffle_music(interaction)
 
-# Остальные команды (экономика, игры и т.д.) остаются в functions.py
 @bot.hybrid_command(name='check', guild_ids=[537267521565229056])
 async def check(ctx):
     functions.log(f'Check by {ctx.author}', type='debug')
@@ -354,7 +324,6 @@ async def _help(ctx):
 async def _addmoney(ctx, member: discord.Member, coins: int):
     await functions.addmoney(ctx, member, coins)
 
-# Команды для карты
 @bot.hybrid_command(name='map')
 async def _map(ctx):
     '''Показать полную карту игры'''

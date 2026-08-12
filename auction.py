@@ -36,7 +36,6 @@ class Auction(commands.Cog):
             await ctx.reply("❌ Цена и длительность должны быть положительными", ephemeral=True)
             return
 
-        # Регистрируем пользователя в БД, если его нет
         if not db.is_user_exists(ctx.author.id):
             db.register_user(ctx.author.id)
 
@@ -84,7 +83,6 @@ class Auction(commands.Cog):
             await ctx.reply(f"❌ Ставка должна быть выше текущей цены ({auction['current_price']} {SKUFCOIN_EMOJI})!", ephemeral=True)
             return
 
-        # Регистрация, если нужно
         if not db.is_user_exists(ctx.author.id):
             db.register_user(ctx.author.id)
 
@@ -93,13 +91,11 @@ class Auction(commands.Cog):
             await ctx.reply(f"❌ Недостаточно средств! У вас {balance} {SKUFCOIN_EMOJI}", ephemeral=True)
             return
 
-        # Обновляем аукцион
         auction['current_price'] = price
         auction['last_bidder'] = ctx.author.id
         auction['last_bidder_name'] = ctx.author.display_name
         self.save_auctions()
 
-        # Обновляем embed
         try:
             msg = await ctx.channel.fetch_message(auction['message_id'])
             embed = msg.embeds[0]
@@ -133,10 +129,9 @@ class Auction(commands.Cog):
                 winner_mention = f"<@{winner_id}>"
                 winner_name = auction.get('last_bidder_name', 'Неизвестный')
 
-            # Проверяем баланс победителя ещё раз и списываем деньги
             current_balance = db.get_balance(winner_id)
             if current_balance >= price:
-                db.update_balance(winner_id, -price)  # списываем
+                db.update_balance(winner_id, -price)
                 embed.description = f"**Лот:** {auction['item']}\n**Победитель:** {winner_mention}\n**Цена продажи:** {price} {SKUFCOIN_EMOJI}"
                 log(f"[AUCTION] Снято {price} с {winner_id} за {auction['item']}")
             else:
