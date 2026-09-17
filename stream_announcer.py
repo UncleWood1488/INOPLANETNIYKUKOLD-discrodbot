@@ -2,7 +2,7 @@
 """
 Автоматический анонсер стримов на VK Video Live для Discord.
 Проверяет статус эфира:
-  1. Публичный API VK Video Live (заголовок + статус)
+  1. Публичный API VK Video Live (заголовок + игра + статус)
   2. Парсинг HTML страницы канала (fallback)
   3. (Опционально) Авторизованный API, если задан VK_ACCESS_TOKEN
 
@@ -81,8 +81,34 @@ async def _fetch_stream_data(session: aiohttp.ClientSession) -> dict | None:
         return None
 
 
+def _extract_category(stream: dict, channel: dict) -> str:
+    """
+    Пытается вытащить название игры/категории из разных полей ответа.
+    VK Video Live может отдавать её под разными именами — пробуем все.
+    """
+    # 1) Прямые строковые поля
+    for key in (
+        "category", "categoryName", "category_name",
+        "game", "gameName", "game_name",
+    ):
+        val = stream.get(key) or channel.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+
+    # 2) Вложенные объекты — часто вида {"id":..., "name":...} или {"title":...}
+    for key in ("category", "game", "categoryInfo", "gameInfo"):
+        obj = stream.get(key) or channel.get(key)
+        if isinstance(obj, dict):
+            for inner in ("name", "title", "displayName"):
+                val = obj.get(inner)
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+
+    return ""
+
+
 def _parse_stream_data(data: dict) -> dict:
-    """Извлекает из ответа API заголовок и статус эфира."""
+    """Извлекает из ответа API заголовок, игру и статус эфира."""
     stream = data.get("stream") or {}
     channel = data.get("channel") or {}
 
@@ -98,11 +124,14 @@ def _parse_stream_data(data: dict) -> dict:
         or ""
     )
 
+    category = _extract_category(stream, channel)
+
     return {
         "is_live": is_online and not is_ended,
         "is_online": is_online,
         "is_ended": is_ended,
         "title": title.strip() if isinstance(title, str) else "",
+        "category": category,
     }
 
 
@@ -164,6 +193,7 @@ async def get_stream_info() -> dict:
     {
         'is_live': bool,
         'title': str,
+        'category': str,
         'is_online': bool,
         'is_ended': bool,
     }
@@ -175,7 +205,7 @@ async def get_stream_info() -> dict:
             info = _parse_stream_data(data)
             logger.info(
                 f"[STREAM] API: online={info['is_online']}, ended={info['is_ended']}, "
-                f"title='{info['title']}'"
+                f"title='{info['title']}', category='{info['category']}'"
             )
 
             if info["is_live"]:
@@ -193,6 +223,7 @@ async def get_stream_info() -> dict:
             "is_online": html is True,
             "is_ended": html is not True,
             "title": "",
+            "category": "",
         }
 
 
@@ -200,14 +231,23 @@ async def get_stream_info() -> dict:
 
 def create_announcement_embed(stream_info: dict) -> discord.Embed:
     title = stream_info.get("title") or ""
+    category = stream_info.get("category") or ""
 
     embed = discord.Embed(
-        title="🔴 СТРИМ НАЧАЛСЯ!",
+        title="🔴СТРИМ НАЧАЛСЯ!",
         description=f"**{title}**" if title else None,
         color=EMBED_COLOR,
         url=VK_STREAM_URL,
         timestamp=discord.utils.utcnow(),
     )
+
+    if category:
+        embed.add_field(
+            name="Игра",
+            value=category,
+            inline=False,
+        )
+
     embed.add_field(
         name="VK Video Live",
         value=f"[Смотреть трансляцию]({VK_STREAM_URL})",
