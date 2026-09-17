@@ -29,7 +29,7 @@ else:
 
 FFmpegPCMAudio.executable = FFMPEG_PATH
 
-# Улучшенные настройки yt-dlp для решения проблем с сетью
+# Улучшенные настройки yt-dlp
 def get_ytdl_options():
     return {
         'format': 'bestaudio/best',
@@ -67,9 +67,10 @@ def get_playlist_ytdl_options():
     options = get_ytdl_options()
     options.update({
         'noplaylist': False,
-        'extract_flat': True,
+        'extract_flat': 'in_playlist',  # Изменено для лучшего извлечения
         'ignoreerrors': True,
-        'playlistend': 50,
+        'playlistend': 100,
+        'extract_flat': False,  # Изменено для полного извлечения
     })
     return options
 
@@ -113,12 +114,23 @@ async def yt_query(query: str, max_retries: int = 3):
                 raise DownloadError(f"⚠️ Ошибка обработки трека после {max_retries} попыток: {str(e)}")
             await asyncio.sleep(2)
 
-async def yt_playlist_query(query: str, max_tracks: int = 50, max_retries: int = 2):
+async def yt_playlist_query(query: str, max_tracks: int = 100, max_retries: int = 3):
     """Улучшенная загрузка плейлиста с повторными попытками"""
     for attempt in range(max_retries):
         try:
-            ytdl_options = get_playlist_ytdl_options()
-            ytdl_options['playlistend'] = max_tracks
+            # Используем extract_flat=False для полного извлечения
+            ytdl_options = {
+                'format': 'bestaudio/best',
+                'noplaylist': False,
+                'ignoreerrors': True,
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': False,
+                'playlistend': max_tracks,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                }
+            }
             
             ytdl = YoutubeDL(ytdl_options)
             info = await asyncio.to_thread(ytdl.extract_info, query, download=False)
@@ -127,22 +139,71 @@ async def yt_playlist_query(query: str, max_tracks: int = 50, max_retries: int =
                 raise DownloadError("🔍 Плейлист не найден или пуст")
 
             tracks = []
+            
+            # Проверяем, является ли это плейлистом
             if 'entries' in info:
-                successful_tracks = 0
-                for entry in info['entries']:
-                    if entry and entry.get('url') and successful_tracks < max_tracks:
+                entries = info['entries']
+                logger.info(f"[PLAYLIST] Найдено {len(entries)} треков в плейлисте")
+                
+                if not entries:
+                    raise DownloadError("❌ В плейлисте нет треков")
+                
+                # Обрабатываем каждый трек
+                for i, entry in enumerate(entries):
+                    if not entry:
+                        continue
+                    
+                    # Проверяем, есть ли URL у трека
+                    if 'url' not in entry:
+                        # Если URL нет, пытаемся получить его отдельно
                         try:
-                            track_info = await yt_query(entry['url'], max_retries=2)
-                            if track_info:
-                                tracks.append(track_info)
-                                successful_tracks += 1
+                            track_url = entry.get('webpage_url') or entry.get('url')
+                            if track_url:
+                                # Извлекаем информацию о треке отдельно
+                                single_ytdl = YoutubeDL(get_ytdl_options())
+                                single_info = await asyncio.to_thread(single_ytdl.extract_info, track_url, download=False)
+                                if single_info:
+                                    entry = single_info
                         except Exception as e:
-                            logger.warning(f"[PLAYLIST] Пропуск трека {entry.get('title', 'Unknown')}: {str(e)}")
+                            logger.warning(f"[PLAYLIST] Не удалось загрузить трек {i+1}: {str(e)}")
                             continue
+                    
+                    # Собираем информацию о треке
+                    track_info = {
+                        'source': entry.get('url'),
+                        'title': entry.get('title', 'Без названия')[:200],
+                        'duration': entry.get('duration', 0),
+                        'url': entry.get('webpage_url', query),
+                        'author': entry.get('uploader', 'Неизвестен')[:100],
+                        'thumbnail': entry.get('thumbnail') or 
+                                   f"https://img.youtube.com/vi/{entry.get('id', '')}/hqdefault.jpg"
+                    }
+                    
+                    # Проверяем, что у трека есть источник
+                    if track_info['source']:
+                        tracks.append(track_info)
+                        logger.info(f"[PLAYLIST] Загружен трек {len(tracks)}: {track_info['title'][:50]}")
+                    else:
+                        logger.warning(f"[PLAYLIST] Пропущен трек {i+1}: нет аудиоисточника")
 
-            if not tracks:
-                raise DownloadError("❌ Не удалось загрузить ни одного трека из плейлиста")
+                if not tracks:
+                    raise DownloadError("❌ Не удалось загрузить ни одного трека из плейлиста")
+                    
+            else:
+                # Это одиночный трек, а не плейлист
+                track_info = {
+                    'source': info.get('url'),
+                    'title': info.get('title', 'Без названия')[:200],
+                    'duration': info.get('duration', 0),
+                    'url': info.get('webpage_url', query),
+                    'author': info.get('uploader', 'Неизвестен')[:100],
+                    'thumbnail': info.get('thumbnail') or 
+                               f"https://img.youtube.com/vi/{info.get('id', '')}/hqdefault.jpg"
+                }
+                if track_info['source']:
+                    tracks.append(track_info)
 
+            logger.info(f"[PLAYLIST] Успешно загружено {len(tracks)} треков")
             return tracks
 
         except Exception as e:
@@ -182,47 +243,37 @@ async def play_next(guild_id: int = None):
         player = await get_music_player(guild_id)
         voice = guild.voice_client
 
-        # Проверяем, что голосовое соединение активно
         if not voice or not voice.is_connected():
             if guild_id in music_players:
                 music_players.pop(guild_id, None)
             return
 
         async with player['lock']:
-            # ИСПРАВЛЕННАЯ логика выбора следующего трека для режимов повтора
             if player['loop_mode'] == 'one' and player['current_track']:
-                # Повтор текущего трека - используем тот же трек
                 current = player['current_track']
             elif player['loop_mode'] == 'queue' and player['queue']:
-                # Повтор плейлиста - перемещаем текущий трек в конец очереди
                 if player['current_track']:
                     player['queue'].append(player['current_track'])
                 current = player['queue'].pop(0) if player['queue'] else None
             else:
-                # Обычный режим - берем следующий трек из очереди
                 current = player['queue'].pop(0) if player['queue'] else None
             
             player['current_track'] = current
 
             if not current:
-                # Если очередь пуста, отключаемся
                 if voice and voice.is_connected():
                     await voice.disconnect()
                 music_players.pop(guild_id, None)
                 return
 
-        # Проверяем соединение перед воспроизведением
         if not voice.is_connected():
             return
 
-        # ИСПРАВЛЕНИЕ: Создаем after_playback внутри функции play_next чтобы иметь доступ к bot.loop
         def after_playback(error):
             if error:
                 logger.error(f"[FFMPEG] Ошибка воспроизведения: {error}")
-            # Используем run_coroutine_threadsafe вместо create_task
             asyncio.run_coroutine_threadsafe(play_next(guild_id=guild_id), bot.loop)
 
-        # Воспроизведение с обработкой ошибок
         try:
             voice.play(
                 FFmpegPCMAudio(
@@ -233,7 +284,6 @@ async def play_next(guild_id: int = None):
                 after=after_playback
             )
             
-            # Отправка сообщения о текущем треке в текстовый канал
             embed, view = now_playing_embed(
                 title=current['title'],
                 url=current['url'],
@@ -241,30 +291,26 @@ async def play_next(guild_id: int = None):
                 author=current.get('author', 'Неизвестен'),
                 thumbnail=current.get('thumbnail', ''),
                 guild_id=guild_id,
-                added_by=current.get('added_by_name', 'Неизвестный пользователь'),  # Используем имя вместо ID
+                added_by=current.get('added_by_name', 'Неизвестный пользователь'),
                 loop_mode=player['loop_mode'],
                 queue_length=len(player['queue'])
             )
             
-            # Находим текстовый канал для отправки сообщения
             text_channel = None
             if player.get('text_channel'):
                 text_channel = guild.get_channel(player['text_channel'])
             if not text_channel:
                 text_channel = guild.system_channel or guild.text_channels[0]
             
-            # Отправляем новое сообщение для каждого трека
             await text_channel.send(embed=embed, view=view)
             
         except Exception as e:
             logger.error(f"[PLAYER] Ошибка воспроизведения: {str(e)}")
-            # Пропускаем проблемный трек и пытаемся воспроизвести следующий
             await asyncio.sleep(1)
             await play_next(guild_id=guild_id)
 
     except Exception as e:
         logger.error(f"[PLAYER] Критическая ошибка: {str(e)}")
-        # В случае критической ошибки очищаем плеер
         if guild_id and guild_id in music_players:
             music_players.pop(guild_id, None)
 
@@ -288,16 +334,15 @@ async def play_music(interaction: discord.Interaction, query: str):
         except discord.ClientException as e:
             return await interaction.followup.send(embed=error_embed(f"❌ Ошибка подключения: {str(e)}"))
 
-        # Сохраняем текстовый канал для отправки уведомлений
         player = await get_music_player(interaction.guild.id)
         player['text_channel'] = interaction.channel.id
 
-        # Определяем тип запроса (плейлист или одиночный трек)
-        is_playlist = any(keyword in query.lower() for keyword in ['playlist', 'list='])
+        # Проверяем, является ли запрос плейлистом
+        is_playlist = any(keyword in query.lower() for keyword in ['playlist', 'list=', '&list='])
         
         try:
             if is_playlist:
-                loading_msg = await interaction.followup.send("🔄 Загружаю плейлист... Это может занять некоторое время", ephemeral=True)
+                loading_msg = await interaction.followup.send("🔄 Загружаю плейлист... Это может занять некоторое время")
                 
                 tracks = await yt_playlist_query(query)
                 
@@ -306,18 +351,17 @@ async def play_music(interaction: discord.Interaction, query: str):
                 async with player['lock']:
                     for track in tracks:
                         track['added_by'] = interaction.user.id
-                        track['added_by_name'] = interaction.user.display_name  # Сохраняем имя пользователя
+                        track['added_by_name'] = interaction.user.display_name
                         player['queue'].append(track)
                         added_count += 1
 
                 await loading_msg.edit(content=f"✅ Добавлено {added_count} треков из плейлиста")
                 
             else:
-                # Одиночный трек с улучшенной обработкой ошибок
                 try:
                     track = await yt_query(query)
                     track['added_by'] = interaction.user.id
-                    track['added_by_name'] = interaction.user.display_name  # Сохраняем имя пользователя
+                    track['added_by_name'] = interaction.user.display_name
 
                     player = await get_music_player(interaction.guild.id)
                     async with player['lock']:
@@ -333,7 +377,6 @@ async def play_music(interaction: discord.Interaction, query: str):
         except DownloadError as e:
             return await interaction.followup.send(embed=error_embed(f"❌ {str(e)}"))
 
-        # Если ничего не играет, начинаем воспроизведение
         if not voice_client.is_playing():
             await play_next(guild_id=interaction.guild.id)
 
@@ -360,7 +403,6 @@ async def play_playlist(interaction: discord.Interaction, playlist_url: str):
         except discord.ClientException as e:
             return await interaction.followup.send(embed=error_embed(f"❌ Ошибка подключения: {str(e)}"))
 
-        # Сохраняем текстовый канал
         player = await get_music_player(interaction.guild.id)
         player['text_channel'] = interaction.channel.id
 
@@ -374,7 +416,7 @@ async def play_playlist(interaction: discord.Interaction, playlist_url: str):
             async with player['lock']:
                 for track in tracks:
                     track['added_by'] = interaction.user.id
-                    track['added_by_name'] = interaction.user.display_name  # Сохраняем имя пользователя
+                    track['added_by_name'] = interaction.user.display_name
                     player['queue'].append(track)
                     added_count += 1
 
@@ -387,6 +429,7 @@ async def play_playlist(interaction: discord.Interaction, playlist_url: str):
 
         except DownloadError as e:
             await loading_msg.edit(content=f"❌ {str(e)}")
+            return
 
         if not voice_client.is_playing():
             await play_next(guild_id=interaction.guild.id)
@@ -560,7 +603,6 @@ async def cleanup_inactive_players():
                 
             voice_client = guild.voice_client
             
-            # Проверяем условия для удаления плеера
             should_remove = (
                 (not voice_client or not voice_client.is_connected()) and 
                 not player_data['queue']
@@ -569,7 +611,6 @@ async def cleanup_inactive_players():
             if should_remove:
                 guilds_to_remove.append(guild_id)
         
-        # Удаляем неактивные плееры
         for guild_id in guilds_to_remove:
             if guild_id in music_players:
                 music_players.pop(guild_id, None)

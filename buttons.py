@@ -1,57 +1,5 @@
 import discord
 
-async def bj_buttons(ctx, bjplayers):
-    async def button_hit_callback(interaction):
-        if ctx.author.id != interaction.user.id:
-            return await interaction.response.defer()
-        if interaction.user.id not in bjplayers:
-            return await interaction.response.defer()
-        game = bjplayers[interaction.user.id]
-        if not game.is_playing():
-            return await interaction.response.defer()
-        
-        msg = game.hit()
-        if game.is_playing():
-            await interaction.response.edit_message(content=msg)
-        else:
-            del bjplayers[interaction.user.id]
-            await interaction.response.edit_message(content=msg, view=None)
-
-    async def button_stay_callback(interaction):
-        if ctx.author.id != interaction.user.id:
-            return await interaction.response.defer()
-        if interaction.user.id not in bjplayers:
-            return await interaction.response.defer()
-        game = bjplayers[interaction.user.id]
-        if not game.is_playing():
-            return await interaction.response.defer()
-        
-        msg = game.stay()
-        del bjplayers[interaction.user.id]
-        await interaction.response.edit_message(content=msg, view=None)
-
-    async def buttons_timeout():
-        if ctx.author.id in bjplayers:
-            game = bjplayers[ctx.author.id]
-            msg = game.stay()
-            del bjplayers[ctx.author.id]
-            await ctx.reply('```Response timeout, clicking "Stay":```' + msg)
-        else:
-            await ctx.reply('```Response timeout, but game already ended.```')
-
-    view = discord.ui.View()
-    button_hit = discord.ui.Button(label="Hit!", style=discord.ButtonStyle.green, emoji="👊")
-    button_stay = discord.ui.Button(label="Stay!", style=discord.ButtonStyle.red, emoji="✋")
-
-    view.on_timeout = buttons_timeout
-    button_hit.callback = button_hit_callback
-    button_stay.callback = button_stay_callback
-    
-    view.add_item(button_hit)
-    view.add_item(button_stay)
-
-    return view
-
 async def snake_buttons(ctx, snakeplayers):
     async def button_up_callback(interaction):
         if ctx.author.id != interaction.user.id:

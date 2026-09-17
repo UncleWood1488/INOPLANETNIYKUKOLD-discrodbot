@@ -6,57 +6,59 @@ LOGO_EMOJI = "<a:playerlogo:1335406594200047708>"
 SPEAKER_EMOJI = "<a:speaker:1496553282167111836>"
 SKUFCOIN_EMOJI = "<:skufcoin:1248834544233353227>"
 
-#bj emojies
-"<:2_of_clubs:1329443496159088650>"
-"<:2_of_diamonds:1329443511866622042>"
-"<:2_of_hearts:1329443527138218064>"
-"<:2_of_spades:1329443542820716615>"
-"<:3_of_clubs:1329443559266455605>"
-"<:3_of_diamonds:1329443577641701396>"
-"<:3_of_hearts:1329443599972302879>"
-"<:3_of_spades:1329443618540224612>"
-"<:4_of_clubs:1329443635892064306>"
-"<:4_of_diamonds:1329443650165407808>"
-"<:4_of_hearts:1329443667303334122>"
-"<:4_of_spades:1329443683564654644>"
-"<:5_of_clubs:1329443697447669760>"
-"<:5_of_diamonds:1329443710546608219>"
-"<:5_of_hearts:1329443724836601866>"
-"<:5_of_spades:1329443740720566343>"
-"<:6_of_clubs:1329443759498461215>"
-"<:6_of_diamonds:1329443775050944533>"
-"<:6_of_hearts:1329443816465371248>"
-"<:6_of_spades:1329443869418586172>"
-"<:7_of_clubs:1329443886686404710>"
-"<:7_of_diamonds:1329443903690117121>"
-"<:7_of_hearts:1329443935537463387>"
-"<:7_of_spades:1329443951010385961>"
-"<:8_of_clubs:1329443965107310734>"
-"<:8_of_diamonds:1329443981284605983>"
-"<:8_of_hearts:1329443998686773289>"
-"<:8_of_spades:1329444019335331932>"
-"<:9_of_clubs:1329444034195755039>"
-"<:9_of_diamonds:1329444063132385310>"
-"<:9_of_hearts:1329444079477723206>"
-"<:9_of_spades:1329444094686134302>"
-"<:10_of_clubs:1329444117314408508>"
-"<:10_of_diamonds:1329444132862562368>"
-"<:10_of_hearts:1329444147836354591>"
-"<:10_of_spades:1329444160973045831>"
-"<:ace_of_clubs:1329444174772178945>"
-"<:ace_of_diamonds:1329444202714501211>"
-"<:ace_of_hearts:1329444221169569854>"
-"<:ace_of_spades:1329444303830777977>"
-"<:jack_of_clubs:1329444409615319162>"
-"<:jack_of_diamonds:1329444426598056028>"
-"<:jack_of_hearts:1329444443769667584>"
-"<:jack_of_spades:1329444462438383727>"
-"<:queen_of_clubs:1329444496928145530>"
-"<:queen_of_diamonds:1329444515248869417>"
-"<:queen_of_hearts:1329444529631133736>"
-"<:queen_of_spades:1329444544298749953>"
-"<:king_of_clubs:1329444565274460191>"
-"<:king_of_diamonds:1329444582081036318>"
-"<:king_of_hearts:1329444598367518872>"
-"<:king_of_spades:1329444614968574044>"
-"<:black_joker:1329444661906898975>"
+# Словарь с кастомными эмодзи карт
+BJ_CARD_EMOJIS = {
+    "2_of_clubs": "<:2_of_clubs:1329443496159088650>",
+    "2_of_diamonds": "<:2_of_diamonds:1329443511866622042>",
+    "2_of_hearts": "<:2_of_hearts:1329443527138218064>",
+    "2_of_spades": "<:2_of_spades:1329443542820716615>",
+    "3_of_clubs": "<:3_of_clubs:1329443559266455605>",
+    "3_of_diamonds": "<:3_of_diamonds:1329443577641701396>",
+    "3_of_hearts": "<:3_of_hearts:1329443599972302879>",
+    "3_of_spades": "<:3_of_spades:1329443618540224612>",
+    "4_of_clubs": "<:4_of_clubs:1329443635892064306>",
+    "4_of_diamonds": "<:4_of_diamonds:1329443650165407808>",
+    "4_of_hearts": "<:4_of_hearts:1329443667303334122>",
+    "4_of_spades": "<:4_of_spades:1329443683564654644>",
+    "5_of_clubs": "<:5_of_clubs:1329443697447669760>",
+    "5_of_diamonds": "<:5_of_diamonds:1329443710546608219>",
+    "5_of_hearts": "<:5_of_hearts:1329443724836601866>",
+    "5_of_spades": "<:5_of_spades:1329443740720566343>",
+    "6_of_clubs": "<:6_of_clubs:1329443759498461215>",
+    "6_of_diamonds": "<:6_of_diamonds:1329443775050944533>",
+    "6_of_hearts": "<:6_of_hearts:1329443816465371248>",
+    "6_of_spades": "<:6_of_spades:1329443869418586172>",
+    "7_of_clubs": "<:7_of_clubs:1329443886686404710>",
+    "7_of_diamonds": "<:7_of_diamonds:1329443903690117121>",
+    "7_of_hearts": "<:7_of_hearts:1329443935537463387>",
+    "7_of_spades": "<:7_of_spades:1329443951010385961>",
+    "8_of_clubs": "<:8_of_clubs:1329443965107310734>",
+    "8_of_diamonds": "<:8_of_diamonds:1329443981284605983>",
+    "8_of_hearts": "<:8_of_hearts:1329443998686773289>",
+    "8_of_spades": "<:8_of_spades:1329444019335331932>",
+    "9_of_clubs": "<:9_of_clubs:1329444034195755039>",
+    "9_of_diamonds": "<:9_of_diamonds:1329444063132385310>",
+    "9_of_hearts": "<:9_of_hearts:1329444079477723206>",
+    "9_of_spades": "<:9_of_spades:1329444094686134302>",
+    "10_of_clubs": "<:10_of_clubs:1329444117314408508>",
+    "10_of_diamonds": "<:10_of_diamonds:1329444132862562368>",
+    "10_of_hearts": "<:10_of_hearts:1329444147836354591>",
+    "10_of_spades": "<:10_of_spades:1329444160973045831>",
+    "ace_of_clubs": "<:ace_of_clubs:1329444174772178945>",
+    "ace_of_diamonds": "<:ace_of_diamonds:1329444202714501211>",
+    "ace_of_hearts": "<:ace_of_hearts:1329444221169569854>",
+    "ace_of_spades": "<:ace_of_spades:1329444303830777977>",
+    "jack_of_clubs": "<:jack_of_clubs:1329444409615319162>",
+    "jack_of_diamonds": "<:jack_of_diamonds:1329444426598056028>",
+    "jack_of_hearts": "<:jack_of_hearts:1329444443769667584>",
+    "jack_of_spades": "<:jack_of_spades:1329444462438383727>",
+    "queen_of_clubs": "<:queen_of_clubs:1329444496928145530>",
+    "queen_of_diamonds": "<:queen_of_diamonds:1329444515248869417>",
+    "queen_of_hearts": "<:queen_of_hearts:1329444529631133736>",
+    "queen_of_spades": "<:queen_of_spades:1329444544298749953>",
+    "king_of_clubs": "<:king_of_clubs:1329444565274460191>",
+    "king_of_diamonds": "<:king_of_diamonds:1329444582081036318>",
+    "king_of_hearts": "<:king_of_hearts:1329444598367518872>",
+    "king_of_spades": "<:king_of_spades:1329444614968574044>",
+    "black_joker": "<:black_joker:1329444661906898975>"
+}

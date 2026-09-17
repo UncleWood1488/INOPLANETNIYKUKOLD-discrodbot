@@ -3,14 +3,16 @@ from discord import Interaction
 from discord.ui import View, Button
 from db import (
     sellfish, get_balance, get_fishing_stats, update_balance,
-    get_upgrade, set_upgrade, get_all_upgrades, get_lootboxes
+    get_upgrade, set_upgrade, get_all_upgrades, get_lootboxes,
+    add_fish, open_lootbox
 )
-from config import fish_data
-from embedshop import create_category_embed, create_main_embed, create_sell_fish_embed, FISH_PRICES
+from config import fish_data, RARITY_DATA
+from embedshop import create_category_embed, create_main_embed, create_sell_fish_embed
 from threading import Lock
 import functions
 
 sell_lock = Lock()
+
 
 class SellFishButton(discord.ui.Button):
     def __init__(self):
@@ -22,19 +24,18 @@ class SellFishButton(discord.ui.Button):
 
     async def callback(self, interaction: Interaction):
         with sell_lock:
-            fish_stats = get_fishing_stats(interaction.user.id)
-            fish_only = {k: v for k, v in fish_stats.items() if k in FISH_PRICES}
-            total = sum(count * FISH_PRICES[fish] for fish, count in fish_only.items())
-        
+            total = sellfish(interaction.user.id)
+
         if total <= 0:
             await interaction.response.send_message("У вас нет рыбы!", ephemeral=True)
             return
-        
-        update_balance(interaction.user.id, total)
-        sellfish(interaction.user.id)
-        
+
         embed = create_sell_fish_embed(interaction.user)
         await interaction.response.edit_message(embed=embed, view=self.view)
+        await interaction.followup.send(
+            f"✅ Вы продали всю рыбу за **{total}** скуфкоинов!",
+            ephemeral=True
+        )
 
 
 class ShopView(View):
@@ -103,9 +104,10 @@ class ShopView(View):
         async def callback(interaction):
             if interaction.user.id != self.user.id:
                 return await interaction.response.defer()
-            fish_stats = get_fishing_stats(self.user.id)
-            fish_only = {k: v for k, v in fish_stats.items() if k in FISH_PRICES}
-            if sum(fish_only.values()) == 0:
+            stats = get_fishing_stats(self.user.id)
+            rarity_data = stats.get('rarities', {})
+            total_fish = sum(sum(r.values()) for r in rarity_data.values())
+            if total_fish == 0:
                 await interaction.response.send_message("У вас нет рыбы для продажи!", ephemeral=True)
                 return
             self.rebuild_view(3)
@@ -119,20 +121,38 @@ class ShopView(View):
         async def callback(interaction):
             if interaction.user.id != self.user.id:
                 return await interaction.response.defer()
-            
+
             lootboxes = get_lootboxes(self.user.id)
             if lootboxes <= 0:
-                await interaction.response.send_message("У вас нет лутбоксов!", ephemeral=True)
+                await interaction.response.send_message("❌ У вас нет лутбоксов!", ephemeral=True)
                 return
-            
-            success, message = await functions.open_lootbox(self.user.id)
-            if success:
+
+            result = open_lootbox(self.user.id)
+
+            if result['success']:
                 self.rebuild_view(0)
                 embed = create_main_embed(self.user)
+
+                embed_result = discord.Embed(
+                    title="📦 Открытие лутбокса!",
+                    description=result['message'],
+                    color=discord.Color.gold()
+                )
+                embed_result.set_author(
+                    name=self.user.display_name,
+                    icon_url=self.user.display_avatar.url
+                )
+
+                remaining = get_lootboxes(self.user.id)
+                if remaining > 0:
+                    embed_result.set_footer(text=f"У вас осталось {remaining} лутбоксов")
+                else:
+                    embed_result.set_footer(text="Лутбоксы закончились! Ловите рыбу, чтобы получить новые.")
+
                 await interaction.response.edit_message(embed=embed, view=self)
-                await interaction.followup.send(f"📦 Результат: {message}", ephemeral=True)
+                await interaction.followup.send(embed=embed_result, ephemeral=True)
             else:
-                await interaction.response.send_message(message, ephemeral=True)
+                await interaction.response.send_message(f"❌ {result['message']}", ephemeral=True)
         button.callback = callback
         return button
 
