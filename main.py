@@ -54,6 +54,9 @@ MAIN_CHANNEL_ID = 898603315372363797
 LEAVE_CHANNEL_ID = 410189814269214720
 NEW_ROLE_ID = 406212330678910978
 
+# ID роли для админских команд
+ADMIN_ROLE_ID = 406211889228546048
+
 
 async def check_main_channel(interaction: discord.Interaction) -> bool:
     """Проверка что команда выполняется в основном канале"""
@@ -220,7 +223,26 @@ async def on_guild_join(guild):
 
 @bot.event
 async def on_message(message):
-    functions.log(f'{message.guild} - #{message.channel} - @{message.author}: "{functions.replace_mention(message)}"', type='message')
+    # Логируем все сообщения
+    functions.log(
+        f'{message.guild} - #{message.channel} - @{message.author}: '
+        f'"{functions.replace_mention(message)}"',
+        type='message'
+    )
+
+    # --- Автоочистка во всех каналах ---
+    # Пропускаем ЛС (message.guild is None)
+    if message.guild is not None:
+        if not message.author.bot and not message.content.startswith("/"):
+            try:
+                await message.delete()
+            except discord.Forbidden:
+                logger.warning(
+                    f"[CLEANUP] Нет прав удалять сообщения в #{message.channel}"
+                )
+            except discord.HTTPException as e:
+                logger.error(f"[CLEANUP] Ошибка удаления: {e}")
+
     await bot.process_commands(message)
 
 
@@ -424,6 +446,97 @@ async def _addfish(ctx, member: discord.Member, fish_type: str, amount: int = 1)
     '''Выдать рыбу пользователю (только для модераторов)'''
     log(f'{ctx.author} /addfish {member} {fish_type} {amount}', type='debug')
     await functions.addfish(ctx, member, fish_type, amount)
+
+
+@bot.hybrid_command(name='clear', description='Удалить сообщения в канале (только для админов)')
+@app_commands.describe(amount='Сколько последних сообщений удалить (0 = все)')
+async def _clear(ctx, amount: int = 100):
+    """
+    Удаляет последние N сообщений в текущем канале.
+    amount=0 — удалить все сообщения (в пределах лимита Discord).
+    Работает в любом канале.
+    """
+    # --- Проверка роли или права ---
+    has_role = any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles)
+    has_perm = ctx.author.guild_permissions.manage_messages
+
+    if not (has_role or has_perm):
+        return await ctx.reply(
+            "❌ У вас нет прав на использование этой команды!",
+            ephemeral=True
+        )
+
+    # --- Проверка прав бота ---
+    perms = ctx.channel.permissions_for(ctx.guild.me)
+    if not (perms.manage_messages and perms.read_message_history):
+        return await ctx.reply(
+            "❌ У бота нет прав `Manage Messages` или `Read Message History` в этом канале.",
+            ephemeral=True
+        )
+
+    if amount < 0:
+        return await ctx.reply(
+            "❌ Количество не может быть отрицательным (0 = все).",
+            ephemeral=True
+        )
+
+    status_msg = await ctx.reply("🧹 Удаляю сообщения...")
+
+    total_deleted = 0
+
+    try:
+        if amount == 0:
+            while True:
+                deleted = await ctx.channel.purge(
+                    limit=100,
+                    check=lambda m: m.id != status_msg.id,
+                    bulk=True
+                )
+                total_deleted += len(deleted)
+                if len(deleted) < 100:
+                    break
+        else:
+            remaining = amount
+            while remaining > 0:
+                batch = min(remaining, 100)
+                deleted = await ctx.channel.purge(
+                    limit=batch,
+                    check=lambda m: m.id != status_msg.id,
+                    bulk=True
+                )
+                total_deleted += len(deleted)
+                if len(deleted) < batch:
+                    break
+                remaining -= len(deleted)
+
+        log(
+            f'[CLEAR] {ctx.author} удалил {total_deleted} сообщений в #{ctx.channel}',
+            type='debug'
+        )
+
+        try:
+            await status_msg.edit(content=f"✅ Удалено **{total_deleted}** сообщений.")
+        except Exception:
+            pass
+
+        await asyncio.sleep(5)
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+
+    except discord.Forbidden:
+        logger.error("[CLEAR] Нет прав на удаление")
+        try:
+            await status_msg.edit(content="❌ У бота нет прав удалять сообщения в этом канале.")
+        except Exception:
+            pass
+    except discord.HTTPException as e:
+        logger.error(f"[CLEAR] Ошибка удаления: {e}")
+        try:
+            await status_msg.edit(content=f"❌ Ошибка: `{e}`")
+        except Exception:
+            pass
 
 
 @bot.hybrid_command(name='map')
