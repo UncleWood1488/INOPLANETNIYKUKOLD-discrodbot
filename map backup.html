@@ -2,11 +2,15 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Карта - Профиль и роли (синие кнопки)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Карта - Исправленная версия</title>
     <style>
-        /* --- Все стили с поддержкой safe-area --- */
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* --- Базовые стили (без изменений) --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         body {
             height: 100vh;
             width: 100vw;
@@ -22,134 +26,166 @@
             --text-color: #333;
             --header-bg: rgba(255, 255, 255, 0.9);
             --info-bg: rgba(255, 255, 255, 0.8);
-            --button-bg: #5865F2;
+            --button-bg: #4CAF50;
             --button-text: white;
             --context-menu-bg: white;
             --context-menu-border: #ccc;
-            --panel-bg: rgba(255, 255, 255, 0.95);
-            --panel-shadow: rgba(0,0,0,0.3);
-            --safe-bottom: env(safe-area-inset-bottom, 0px);
         }
         body.dark {
             background-color: #212121;
             --border-color-light: rgba(102, 102, 102, 0.5);
             --bg-cell-default: rgba(0, 0, 0, 0.3);
             --bg-cell-hover: rgba(64, 64, 96, 0.5);
-            --text-color: #eee;
+            --text-color: white;
             --header-bg: rgba(51, 51, 51, 0.9);
             --info-bg: rgba(51, 51, 51, 0.8);
             --button-bg: #f0f0f0;
             --button-text: #212121;
             --context-menu-bg: #444;
             --context-menu-border: #666;
-            --panel-bg: rgba(40, 40, 40, 0.95);
-            --panel-shadow: rgba(0,0,0,0.7);
         }
-        .header { height: 60px; background: var(--header-bg); display: flex; align-items: center; padding: 0 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 1000; flex-shrink: 0; }
-        .header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .header-title { flex: 1; text-align: center; font-size: 1.2em; color: var(--text-color); white-space: nowrap; }
-        .header-user-info { color: var(--text-color); display: flex; align-items: center; gap: 5px; }
-        .header-user-info img { width: 30px; height: 30px; border-radius: 50%; }
-        input[type="number"] { padding: 5px; border: 1px solid #ccc; border-radius: 3px; width: 60px; background: var(--bg-cell-default); color: var(--text-color); }
-        button.control-button { padding: 10px 16px; min-height: 44px; min-width: 44px; border: none; border-radius: 4px; cursor: pointer; transition: all 0.3s; background-color: var(--button-bg); color: var(--button-text); font-size: 1em; }
-        button.control-button:hover { opacity: 0.9; }
-        .main-content { flex: 1; display: flex; overflow: hidden; position: relative; }
-        .map-section { flex: 1; position: relative; }
-        .map-container { width: 100%; height: 100%; position: relative; cursor: grab; overflow: hidden; touch-action: none; z-index: 1; }
-        .map-container.grabbing { cursor: grabbing; }
-        .map-grid { display: grid; grid-template-columns: repeat(50, 100px); grid-template-rows: repeat(50, 100px); position: absolute; top: 0; left: 0; transform-origin: 0 0; background-color: transparent; will-change: transform; }
-        .grid-item { width: 100px; height: 100px; border: 1px solid var(--border-color-light); display: flex; justify-content: center; align-items: center; cursor: pointer; transition: all 0.3s; user-select: none; background-color: var(--bg-cell-default); position: relative; }
-        .grid-item:hover { background-color: var(--bg-cell-hover); }
+        /* --- Шапка --- */
+        .header {
+            height: 60px;
+            background: var(--header-bg);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            flex-shrink: 0;
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .header-title {
+            flex: 1;
+            text-align: center;
+            font-size: 1.2em;
+            color: var(--text-color);
+            white-space: nowrap;
+        }
+        .header-user-info {
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .header-user-info img {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+        }
+        input[type="number"] {
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            width: 60px;
+            background: var(--bg-cell-default);
+            color: var(--text-color);
+        }
+        button.control-button {
+            padding: 10px 16px;
+            min-height: 44px;
+            min-width: 44px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background-color: var(--button-bg);
+            color: var(--button-text);
+            font-size: 1em;
+        }
+        button.control-button:hover {
+            opacity: 0.9;
+        }
+        /* --- Основной контент --- */
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+        .map-section {
+            flex: 1;
+            position: relative;
+        }
+        .map-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            cursor: grab;
+            overflow: hidden;
+            touch-action: none;
+            z-index: 1;
+        }
+        .map-container.grabbing {
+            cursor: grabbing;
+        }
+        .map-grid {
+            display: grid;
+            grid-template-columns: repeat(50, 100px);
+            grid-template-rows: repeat(50, 100px);
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: 0 0;
+            background-color: transparent;
+            will-change: transform;
+        }
+        .grid-item {
+            width: 100px;
+            height: 100px;
+            border: 1px solid var(--border-color-light);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            user-select: none;
+            background-color: var(--bg-cell-default);
+            position: relative;
+        }
+        .grid-item:hover {
+            background-color: var(--bg-cell-hover);
+        }
         .grid-item.status-green { background-color: #ccffcc; opacity: 0.7; }
         .grid-item.status-red { background-color: #ffcccc; opacity: 0.7; }
         .grid-item.status-gray { background-color: #cccccc; opacity: 0.7; }
         .grid-item.status-blue { background-color: #cceeff; opacity: 0.7; }
-        .coordinates { font-size: 1em; color: var(--text-color); opacity: 0.8; text-shadow: 0 1px 2px rgba(0,0,0,0.3); pointer-events: none; }
-        /* --- Кнопки зума (квадратные, подняты до середины) --- */
-        .zoom-buttons {
+        .coordinates {
+            font-size: 1em;
+            color: #666;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            pointer-events: none;
+        }
+        /* --- Кнопки управления --- */
+        .control-buttons-group {
             position: absolute;
-            top: 50%;
+            bottom: 20px;
             left: 20px;
-            transform: translateY(-50%);
             display: flex;
             flex-direction: column;
             gap: 10px;
             z-index: 3000;
         }
-        .zoom-btn {
-            width: 48px;
-            height: 48px;
-            border-radius: 8px;
-            background: var(--button-bg);
-            color: var(--button-text);
-            border: none;
+        .control-button.zoom-btn {
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-size: 1.5em;
-            cursor: pointer;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            transition: transform 0.2s, background 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            padding: 0;
         }
-        .zoom-btn:hover { transform: scale(1.05); }
-        .zoom-btn:active { transform: scale(0.95); }
-        /* --- Гамбургер (справа внизу) --- */
-        .hamburger-btn {
-            position: absolute;
-            bottom: calc(20px + var(--safe-bottom));
-            right: 20px;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: var(--button-bg);
-            color: var(--button-text);
-            border: none;
-            font-size: 1.8em;
-            cursor: pointer;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            z-index: 3000;
-            transition: transform 0.2s, background 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            line-height: 1;
-        }
-        .hamburger-btn:hover { transform: scale(1.05); }
-        .hamburger-btn:active { transform: scale(0.95); }
-        .hamburger-btn.open { background: #e74c3c; color: white; }
-        /* --- Выдвижная панель --- */
-        .slide-panel {
-            position: fixed;
-            top: 0;
-            right: -350px;
-            width: 320px;
-            height: 100%;
-            background: var(--panel-bg);
-            box-shadow: -4px 0 20px var(--panel-shadow);
-            transition: right 0.3s ease;
-            z-index: 5000;
-            padding: 20px calc(20px + var(--safe-bottom));
-            padding-bottom: calc(20px + var(--safe-bottom));
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            color: var(--text-color);
-        }
-        .slide-panel.open { right: 0; }
-        .slide-panel .panel-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color-light); padding-bottom: 10px; }
-        .slide-panel .panel-header h2 { font-size: 1.2em; margin: 0; }
-        .slide-panel .panel-close { background: none; border: none; font-size: 2em; cursor: pointer; color: var(--text-color); }
-        .slide-panel .panel-section { display: flex; flex-direction: column; gap: 10px; }
-        .slide-panel .panel-section .control-button { width: 100%; text-align: center; }
-        .slide-panel .panel-section .search-row { display: flex; gap: 8px; flex-wrap: wrap; }
-        .slide-panel .panel-section .search-row input { flex: 1; min-width: 50px; }
-        .slide-panel .panel-section .search-row button { flex: 0 0 auto; }
+        /* --- Информационная панель (добавлена) --- */
         .status-bar {
             position: absolute;
-            bottom: calc(20px + var(--safe-bottom));
-            left: 50%;
-            transform: translateX(-50%);
+            bottom: 20px;
+            right: 20px;
             background: var(--info-bg);
             padding: 8px 14px;
             border-radius: 6px;
@@ -159,13 +195,33 @@
             backdrop-filter: blur(4px);
             border: 1px solid var(--border-color-light);
             pointer-events: none;
-            white-space: nowrap;
         }
-        .context-menu { position: fixed; display: none; background: var(--context-menu-bg); border: 1px solid var(--context-menu-border); border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 4000; list-style: none; padding: 5px 0; min-width: 200px; }
-        .context-menu li { padding: 12px 15px; cursor: pointer; color: var(--text-color); }
-        .context-menu li:hover { background-color: rgba(0,0,0,0.1); }
-        body.dark .context-menu li:hover { background-color: rgba(255,255,255,0.1); }
-        .menu-overlay, .info-overlay, .profile-overlay {
+        /* --- Контекстное меню --- */
+        .context-menu {
+            position: fixed;
+            display: none;
+            background: var(--context-menu-bg);
+            border: 1px solid var(--context-menu-border);
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 4000;
+            list-style: none;
+            padding: 5px 0;
+            min-width: 200px;
+        }
+        .context-menu li {
+            padding: 12px 15px;
+            cursor: pointer;
+            color: var(--text-color);
+        }
+        .context-menu li:hover {
+            background-color: rgba(0,0,0,0.1);
+        }
+        body.dark .context-menu li:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+        /* --- Меню и информация --- */
+        .menu-overlay, .info-overlay {
             position: fixed;
             top: 0;
             left: 0;
@@ -177,7 +233,7 @@
             align-items: center;
             z-index: 2000;
         }
-        .menu-content, .info-window, .profile-window {
+        .menu-content, .info-window {
             background: var(--info-bg);
             padding: 2rem;
             border-radius: 10px;
@@ -189,7 +245,7 @@
             position: relative;
         }
         .menu-content h2 { margin-bottom: 20px; }
-        .menu-close-button, .close-button, .profile-close-button {
+        .menu-close-button, .close-button {
             position: absolute;
             top: 10px;
             right: 15px;
@@ -199,28 +255,68 @@
             border: none;
             color: var(--text-color);
         }
-        .info-window .status-buttons { margin-top: 15px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-        .info-window .status-buttons button { flex: 1 0 auto; min-width: 60px; }
-        .profile-window .profile-avatar { width: 80px; height: 80px; border-radius: 50%; margin: 10px auto; }
-        .profile-window .profile-name { font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
-        .profile-window .role-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 10px 0; }
-        .profile-window .role-badge { background: var(--button-bg); color: var(--button-text); padding: 4px 12px; border-radius: 12px; font-size: 0.85em; }
-        .profile-window .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 15px; }
-        .profile-window .stats-item { background: var(--bg-cell-default); padding: 6px; border-radius: 4px; }
+        .info-window .status-buttons {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+        }
+        .info-window .status-buttons button {
+            flex: 1 0 auto;
+            min-width: 60px;
+        }
+        /* --- Адаптивность --- */
         @media (max-width: 768px) {
-            .header { flex-direction: column; height: auto; padding: 10px; gap: 6px; }
-            .header-controls, .header-title, .header-user-info { width: 100%; justify-content: center; }
-            .header-title { margin: 6px 0; font-size: 1em; white-space: normal; }
+            .header {
+                flex-direction: column;
+                height: auto;
+                padding: 10px;
+                gap: 6px;
+            }
+            .header-controls, .header-title, .header-user-info {
+                width: 100%;
+                justify-content: center;
+            }
+            .header-title {
+                margin: 6px 0;
+                font-size: 1em;
+                white-space: normal;
+            }
             .header-controls { flex-wrap: wrap; }
             .main-content { flex-direction: column; }
             .map-section { flex: 1; }
-            .grid-item { width: 50px; height: 50px; font-size: 0.8em; }
-            .map-grid { grid-template-columns: repeat(50, 50px); grid-template-rows: repeat(50, 50px); }
+            .control-buttons-group {
+                left: 10px;
+                bottom: 10px;
+            }
+            .grid-item {
+                width: 50px;
+                height: 50px;
+                font-size: 0.8em;
+            }
+            .map-grid {
+                grid-template-columns: repeat(50, 50px);
+                grid-template-rows: repeat(50, 50px);
+            }
             .coordinates { font-size: 0.8em; }
-            .zoom-btn { width: 42px; height: 42px; font-size: 1.3em; border-radius: 6px; }
-            .hamburger-btn { width: 50px; height: 50px; font-size: 1.5em; }
-            .slide-panel { width: 280px; right: -300px; }
-            .status-bar { left: 10px; right: 10px; transform: none; font-size: 0.8em; padding: 6px 10px; white-space: normal; text-align: center; }
+            button.control-button {
+                padding: 8px 12px;
+                min-height: 36px;
+                min-width: 36px;
+                font-size: 0.9em;
+            }
+            .control-button.zoom-btn {
+                width: 36px;
+                height: 36px;
+                font-size: 1.2em;
+            }
+            .status-bar {
+                bottom: 10px;
+                right: 10px;
+                font-size: 0.8em;
+                padding: 6px 10px;
+            }
         }
     </style>
 </head>
@@ -229,6 +325,9 @@
     <div class="header">
         <div class="header-controls">
             <button class="control-button" id="discordLoginButton">Войти через Discord</button>
+            <input type="number" id="coordInputX" placeholder="X" min="0" max="49">
+            <input type="number" id="coordInputY" placeholder="Y" min="0" max="49">
+            <button class="control-button" id="searchButton">Найти</button>
         </div>
         <div class="header-title">Карта специальной военной операции 🍉ИОНОТЕКА🍉</div>
         <div class="header-user-info" id="userInfoDisplay" style="display: none;">
@@ -244,36 +343,17 @@
                 <div class="map-grid" id="mapGrid"></div>
             </div>
 
+            <!-- Статус-бар (добавлен) -->
             <div class="status-bar" id="statusBar">
                 Масштаб: <span id="currentScaleDisplay">1.00</span> &nbsp;|&nbsp; Центр: (<span id="currentPositionX">0</span>, <span id="currentPositionY">0</span>)
             </div>
 
-            <!-- Кнопки зума (подняты до середины, квадратные) -->
-            <div class="zoom-buttons">
-                <button class="zoom-btn" id="zoomInButton">+</button>
-                <button class="zoom-btn" id="zoomOutButton">−</button>
-            </div>
-
-            <!-- Гамбургер (справа) -->
-            <button class="hamburger-btn" id="hamburgerBtn" aria-label="Открыть меню">☰</button>
-
-            <!-- Выдвижная панель -->
-            <div class="slide-panel" id="slidePanel">
-                <div class="panel-header">
-                    <h2>Управление</h2>
-                    <button class="panel-close" id="panelCloseBtn">✕</button>
-                </div>
-                <div class="panel-section">
-                    <div class="search-row">
-                        <input type="number" id="coordInputX" placeholder="X" min="0" max="49">
-                        <input type="number" id="coordInputY" placeholder="Y" min="0" max="49">
-                        <button class="control-button" id="searchButton">Найти</button>
-                    </div>
-                    <button class="control-button" id="profileButton">👤 Профиль</button>
-                    <button class="control-button" id="resetButton">Центрирование</button>
-                    <button class="control-button" id="menuButton">Меню</button>
-                    <button class="control-button" id="themeButton">Тёмный фон</button>
-                </div>
+            <div class="control-buttons-group">
+                <button class="control-button zoom-btn" id="zoomInButton">+</button>
+                <button class="control-button zoom-btn" id="zoomOutButton">−</button>
+                <button class="control-button" id="themeButton">Тёмный фон</button>
+                <button class="control-button" id="resetButton">Центрирование</button>
+                <button class="control-button" id="menuButton">Меню</button>
             </div>
         </div>
     </div>
@@ -317,30 +397,21 @@
         </div>
     </div>
 
-    <!-- Оверлей профиля -->
-    <div class="profile-overlay" id="profileOverlay">
-        <div class="profile-window">
-            <button class="profile-close-button" id="profileCloseButton">×</button>
-            <h2>Профиль</h2>
-            <div id="profileContent">
-                <!-- Заполняется динамически -->
-            </div>
-        </div>
-    </div>
-
     <script>
         (function() {
             'use strict';
 
-            const GUILD_ID = '406211807435423754';
-            const DISCORD_CLIENT_ID = 'YOUR_CLIENT_ID_HERE';
+            // --- Конфигурация ---
+            const GUILD_ID = '406211807435423754'; // не используется, но оставлено
+            const PROXY_URL = 'https://your-proxy.com/discord-api/'; // не используется
+            const DISCORD_CLIENT_ID = 'YOUR_CLIENT_ID_HERE'; // ЗАМЕНИТЕ НА ВАШ CLIENT ID
             const DISCORD_REDIRECT_URI = encodeURIComponent(window.location.href);
-            const DISCORD_SCOPE = encodeURIComponent('identify guilds.members.read');
+            const DISCORD_SCOPE = encodeURIComponent('identify');
 
             const gridSize = 50;
-            const cellSize = 100;
-            const BUFFER = 300; // Увеличен для одинакового перемещения во все стороны
+            const cellSize = 100; // px
 
+            // --- Глобальные переменные ---
             let scale = 1;
             let posX = 0;
             let posY = 0;
@@ -358,10 +429,8 @@
             let selectedCellCoords = null;
             let rightClickedCellCoords = null;
             let currentUser = null;
-            let userRoles = [];
-            let guildRoles = {};
-            let isOnGuild = false;
 
+            // --- DOM элементы ---
             const mapContainer = document.getElementById('mapContainer');
             const mapGrid = document.getElementById('mapGrid');
             const coordInputX = document.getElementById('coordInputX');
@@ -384,18 +453,13 @@
             const infoOverlay = document.getElementById('infoOverlay');
             const cellCoordsSpan = document.getElementById('cellCoords');
             const cellStatusSpan = document.getElementById('cellStatus');
-            const hamburgerBtn = document.getElementById('hamburgerBtn');
-            const slidePanel = document.getElementById('slidePanel');
-            const panelCloseBtn = document.getElementById('panelCloseBtn');
-            const profileButton = document.getElementById('profileButton');
-            const profileOverlay = document.getElementById('profileOverlay');
-            const profileCloseBtn = document.getElementById('profileCloseButton');
-            const profileContent = document.getElementById('profileContent');
 
+            // --- Инициализация ---
             function initApp() {
                 loadSettingsFromStorage();
                 loadCellStatesFromStorage();
                 initGrid();
+                // Центрирование после загрузки настроек
                 if (scale === 1 && posX === 0 && posY === 0) {
                     centerMap();
                 } else {
@@ -407,6 +471,7 @@
                 checkForDiscordToken();
             }
 
+            // --- Создание сетки ---
             function initGrid() {
                 mapGrid.innerHTML = '';
                 for (let row = 0; row < gridSize; row++) {
@@ -422,11 +487,13 @@
                         coords.textContent = `${col},${row}`;
                         gridItem.appendChild(coords);
 
+                        // Применяем сохранённый статус
                         const stateKey = `${col}-${row}`;
                         if (cellStates[stateKey]) {
                             gridItem.classList.add(`status-${cellStates[stateKey]}`);
                         }
 
+                        // Клик левой кнопкой — информация
                         gridItem.addEventListener('click', (e) => {
                             e.stopPropagation();
                             const x = parseInt(gridItem.dataset.x);
@@ -435,6 +502,7 @@
                             showCellInfo(x, y);
                         });
 
+                        // Правый клик — контекстное меню (только для мыши)
                         gridItem.addEventListener('contextmenu', (e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -448,7 +516,9 @@
                 }
             }
 
+            // --- Обработчики событий ---
             function setupEventListeners() {
+                // Кнопки
                 zoomInButton.addEventListener('click', () => adjustScale(1.2));
                 zoomOutButton.addEventListener('click', () => adjustScale(0.8));
                 themeButton.addEventListener('click', toggleTheme);
@@ -458,26 +528,28 @@
                 document.getElementById('infoCloseButton').addEventListener('click', closeInfo);
                 searchButton.addEventListener('click', searchByCoordinates);
 
-                hamburgerBtn.addEventListener('click', toggleSlidePanel);
-                panelCloseBtn.addEventListener('click', closeSlidePanel);
-
-                profileButton.addEventListener('click', () => {
-                    closeSlidePanel();
-                    showProfile();
-                });
-                profileCloseBtn.addEventListener('click', closeProfile);
-
+                // Колесо мыши
                 mapContainer.addEventListener('wheel', handleWheel, { passive: false });
 
+                // Pointer Events для перетаскивания (заменяют mouse и touch)
                 mapContainer.addEventListener('pointerdown', onPointerDown);
                 document.addEventListener('pointermove', onPointerMove);
                 document.addEventListener('pointerup', onPointerUp);
                 document.addEventListener('pointercancel', onPointerUp);
 
+                // Touch события для пинч-зума и долгого нажатия (дополнительно)
                 mapContainer.addEventListener('touchstart', onTouchStart, { passive: false });
                 mapContainer.addEventListener('touchmove', onTouchMove, { passive: false });
                 mapContainer.addEventListener('touchend', onTouchEnd, { passive: false });
 
+                // Закрытие контекстного меню по клику вне
+                document.addEventListener('click', (e) => {
+                    if (!contextMenu.contains(e.target)) {
+                        contextMenu.style.display = 'none';
+                    }
+                });
+
+                // Обработчики для пунктов контекстного меню (используем делегирование)
                 contextMenu.addEventListener('click', (e) => {
                     const target = e.target.closest('li');
                     if (!target) return;
@@ -486,26 +558,21 @@
                         return;
                     }
                     const status = target.dataset.status;
-                    if (status) changeRightClickedCellStatus(status);
+                    if (status) {
+                        changeRightClickedCellStatus(status);
+                    }
                 });
 
-                document.addEventListener('click', (e) => {
-                    if (!contextMenu.contains(e.target)) contextMenu.style.display = 'none';
-                });
-
-                document.querySelectorAll('.info-window .status-buttons button').forEach(btn => {
+                // Обработчики кнопок в информационном окне (делегирование)
+                const infoButtons = document.querySelectorAll('.info-window .status-buttons button');
+                infoButtons.forEach(btn => {
                     btn.addEventListener('click', () => {
                         const status = btn.dataset.status;
                         if (status) changeSelectedCellStatusModal(status);
                     });
                 });
 
-                window.addEventListener('resize', () => {
-                    applyBounds();
-                    updateTransform();
-                    updateUIInfo();
-                });
-
+                // Discord login
                 discordLoginButton.addEventListener('click', () => {
                     if (currentUser) {
                         logoutUser();
@@ -513,34 +580,21 @@
                         initiateDiscordLogin();
                     }
                 });
+
+                // Изменение размера окна
+                window.addEventListener('resize', () => {
+                    applyBounds();
+                    updateTransform();
+                    updateUIInfo();
+                });
             }
 
-            // --- Управление панелью и меню ---
-            function toggleSlidePanel() {
-                const isOpen = slidePanel.classList.toggle('open');
-                hamburgerBtn.classList.toggle('open', isOpen);
-                hamburgerBtn.textContent = isOpen ? '✕' : '☰';
-                hamburgerBtn.style.display = isOpen ? 'none' : 'flex';
-            }
-
-            function closeSlidePanel() {
-                slidePanel.classList.remove('open');
-                hamburgerBtn.classList.remove('open');
-                hamburgerBtn.textContent = '☰';
-                hamburgerBtn.style.display = 'flex';
-            }
-
-            function toggleMenu() {
-                if (slidePanel.classList.contains('open')) {
-                    closeSlidePanel();
-                }
-                menuOverlay.style.display = menuOverlay.style.display === 'flex' ? 'none' : 'flex';
-            }
-            // ------------------------------------------------
-
+            // --- Перетаскивание (Pointer) ---
             function onPointerDown(e) {
+                // Левой кнопкой или сенсором
                 if (e.button !== 0 && e.pointerType !== 'touch') return;
-                if (e.pointerType === 'touch' && e.touches && e.touches.length > 1) return;
+                if (e.pointerType === 'touch' && e.touches && e.touches.length > 1) return; // пинч обрабатывается отдельно
+
                 clearLongPressTimer();
                 isDragging = true;
                 startX = e.clientX - posX * scale;
@@ -548,6 +602,7 @@
                 mapContainer.classList.add('grabbing');
                 e.preventDefault();
             }
+
             function onPointerMove(e) {
                 if (!isDragging) return;
                 posX = (e.clientX - startX) / scale;
@@ -557,6 +612,7 @@
                 updateUIInfo();
                 e.preventDefault();
             }
+
             function onPointerUp(e) {
                 if (isDragging) {
                     isDragging = false;
@@ -567,9 +623,14 @@
                 }
             }
 
-            let touchStartTime = 0, touchStartPos = {x:0,y:0}, touchMoved = false;
+            // --- Обработка сенсорных жестов (pinch и long press) ---
+            let touchStartTime = 0;
+            let touchStartPos = { x: 0, y: 0 };
+            let touchMoved = false;
+
             function onTouchStart(e) {
                 if (e.touches.length === 2) {
+                    // Начинаем пинч
                     lastTouchDistance = getDistance(e.touches);
                     initialScaleOnPinch = scale;
                     clearLongPressTimer();
@@ -582,7 +643,10 @@
                     touchStartPos.x = touch.clientX;
                     touchStartPos.y = touch.clientY;
                     touchMoved = false;
+
+                    // Запускаем таймер долгого нажатия
                     longPressTimer = setTimeout(() => {
+                        // Проверяем, не было ли перемещения
                         if (!touchMoved) {
                             isLongPressTriggered = true;
                             const rect = mapContainer.getBoundingClientRect();
@@ -596,12 +660,15 @@
                     }, 500);
                 }
             }
+
             function onTouchMove(e) {
                 if (e.touches.length === 2) {
+                    // Пинч-зум
                     e.preventDefault();
                     const currentDist = getDistance(e.touches);
                     if (lastTouchDistance > 0) {
                         const rect = mapContainer.getBoundingClientRect();
+                        // Центр между пальцами
                         const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
                         const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
                         const contentCenterX = (centerX - rect.left - posX) / scale;
@@ -619,44 +686,57 @@
                     return;
                 }
                 if (e.touches.length === 1) {
+                    // Если палец двигается, сбрасываем таймер и отмечаем перемещение
                     touchMoved = true;
                     clearLongPressTimer();
                 }
             }
+
             function onTouchEnd(e) {
                 clearLongPressTimer();
+                // Если было долгое нажатие и оно сработало, предотвращаем клик
                 if (isLongPressTriggered) {
                     isLongPressTriggered = false;
                     e.preventDefault();
                 }
             }
+
+            function clearLongPressTimer() {
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+                isLongPressTriggered = false;
+            }
+
             function getDistance(touches) {
                 if (touches.length < 2) return 0;
                 const dx = touches[0].clientX - touches[1].clientX;
                 const dy = touches[0].clientY - touches[1].clientY;
                 return Math.sqrt(dx*dx + dy*dy);
             }
-            function clearLongPressTimer() {
-                if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-                isLongPressTriggered = false;
-            }
 
+            // --- Обработка колеса ---
             function handleWheel(e) {
                 e.preventDefault();
                 const delta = e.deltaY > 0 ? 0.9 : 1.1;
                 const oldScale = scale;
                 scale = Math.min(Math.max(scale * delta, minScale), maxScale);
                 const scaleChange = scale / oldScale;
+
                 const rect = mapContainer.getBoundingClientRect();
                 const mouseX = e.clientX - rect.left;
                 const mouseY = e.clientY - rect.top;
+
                 posX = mouseX - (mouseX - posX) * scaleChange;
                 posY = mouseY - (mouseY - posY) * scaleChange;
+
                 applyBounds();
                 updateTransform();
                 updateUIInfo();
             }
 
+            // --- Функции масштабирования и позиционирования ---
             function adjustScale(factor) {
                 const oldScale = scale;
                 scale = Math.min(Math.max(scale * factor, minScale), maxScale);
@@ -671,37 +751,23 @@
                 updateUIInfo();
             }
 
-            // ===== ИСПРАВЛЕННАЯ ФУНКЦИЯ applyBounds =====
             function applyBounds() {
                 const scaledWidth = baseWidth * scale;
                 const scaledHeight = baseHeight * scale;
                 const containerWidth = mapContainer.clientWidth;
                 const containerHeight = mapContainer.clientHeight;
-
-                // Симметричный buffer для всех сторон
-                const buffer = BUFFER;
-
-                // Максимальные и минимальные значения для posX и posY
-                // Они симметричны относительно центра
+                const buffer = 100;
                 const maxPosX = (scaledWidth - containerWidth) / 2 + buffer;
                 const minPosX = -(scaledWidth - containerWidth) / 2 - buffer;
                 const maxPosY = (scaledHeight - containerHeight) / 2 + buffer;
                 const minPosY = -(scaledHeight - containerHeight) / 2 - buffer;
-
-                // Если карта меньше контейнера, центрируем
-                if (scaledWidth <= containerWidth) {
-                    posX = (containerWidth - scaledWidth) / 2;
-                } else {
+                if (maxPosX >= minPosX) {
                     posX = Math.max(minPosX, Math.min(maxPosX, posX));
                 }
-
-                if (scaledHeight <= containerHeight) {
-                    posY = (containerHeight - scaledHeight) / 2;
-                } else {
+                if (maxPosY >= minPosY) {
                     posY = Math.max(minPosY, Math.min(maxPosY, posY));
                 }
             }
-            // ==========================================
 
             function updateTransform() {
                 mapGrid.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
@@ -709,17 +775,18 @@
 
             function centerMap() {
                 scale = 1;
-                const containerWidth = mapContainer.clientWidth;
-                const containerHeight = mapContainer.clientHeight;
-                posX = (containerWidth - baseWidth) / 2;
-                posY = (containerHeight - baseHeight) / 2;
+                posX = (mapContainer.clientWidth - baseWidth) / 2;
+                posY = (mapContainer.clientHeight - baseHeight) / 2;
                 applyBounds();
                 updateTransform();
                 updateUIInfo();
             }
 
+            // --- Обновление статус-бара ---
             function updateUIInfo() {
-                if (currentScaleDisplay) currentScaleDisplay.textContent = scale.toFixed(2);
+                if (currentScaleDisplay) {
+                    currentScaleDisplay.textContent = scale.toFixed(2);
+                }
                 if (currentPositionX && currentPositionY) {
                     const centerX = (-posX + mapContainer.clientWidth / 2) / (cellSize * scale);
                     const centerY = (-posY + mapContainer.clientHeight / 2) / (cellSize * scale);
@@ -728,6 +795,7 @@
                 }
             }
 
+            // --- Поиск по координатам ---
             function searchByCoordinates() {
                 const x = parseInt(coordInputX.value, 10);
                 const y = parseInt(coordInputY.value, 10);
@@ -742,10 +810,13 @@
                 updateTransform();
                 updateUIInfo();
                 selectCell(x, y);
-                closeSlidePanel();
             }
 
-            function selectCell(x, y) { selectedCellCoords = {x, y}; }
+            // --- Работа с клетками ---
+            function selectCell(x, y) {
+                selectedCellCoords = { x, y };
+            }
+
             function showCellInfo(x, y) {
                 cellCoordsSpan.textContent = `X:${x}, Y:${y}`;
                 const stateKey = `${x}-${y}`;
@@ -764,7 +835,12 @@
                 infoOverlay.style.display = 'flex';
                 selectedCellCoords = { x, y };
             }
-            function closeInfo() { infoOverlay.style.display = 'none'; selectedCellCoords = null; }
+
+            function closeInfo() {
+                infoOverlay.style.display = 'none';
+                selectedCellCoords = null;
+            }
+
             function changeCellStatus(x, y, newStatus) {
                 const cellElement = document.getElementById(`cell-${x}-${y}`);
                 if (!cellElement) return;
@@ -778,9 +854,11 @@
                 }
                 saveCellStatesToStorage();
             }
+
             function changeSelectedCellStatusModal(newStatus) {
                 if (!selectedCellCoords) return;
                 changeCellStatus(selectedCellCoords.x, selectedCellCoords.y, newStatus);
+                // Обновляем текст статуса в окне
                 let statusText = 'Свободна';
                 if (newStatus !== 'default') {
                     switch(newStatus) {
@@ -792,34 +870,51 @@
                 }
                 cellStatusSpan.textContent = statusText;
             }
+
             function changeRightClickedCellStatus(newStatus) {
                 if (!rightClickedCellCoords) return;
                 changeCellStatus(rightClickedCellCoords.x, rightClickedCellCoords.y, newStatus);
                 contextMenu.style.display = 'none';
             }
 
+            // --- Контекстное меню ---
             function openContextMenu(e, x, y) {
                 rightClickedCellCoords = { x, y };
                 contextMenu.style.display = 'block';
                 let left = e.clientX;
                 let top = e.clientY;
                 const menuRect = contextMenu.getBoundingClientRect();
-                if (left + menuRect.width > window.innerWidth) left = window.innerWidth - menuRect.width - 5;
-                if (top + menuRect.height > window.innerHeight) top = window.innerHeight - menuRect.height - 5;
+                if (left + menuRect.width > window.innerWidth) {
+                    left = window.innerWidth - menuRect.width - 5;
+                }
+                if (top + menuRect.height > window.innerHeight) {
+                    top = window.innerHeight - menuRect.height - 5;
+                }
                 contextMenu.style.left = left + 'px';
                 contextMenu.style.top = top + 'px';
             }
+
             function copyCoordinatesToClipboard() {
                 if (!rightClickedCellCoords) return;
                 const coords = `${rightClickedCellCoords.x},${rightClickedCellCoords.y}`;
                 navigator.clipboard.writeText(coords).then(() => {
                     alert(`Координаты ${coords} скопированы!`);
-                }).catch(() => alert('Не удалось скопировать'));
+                }).catch(() => {
+                    alert('Не удалось скопировать координаты');
+                });
                 contextMenu.style.display = 'none';
             }
 
-            function closeMainMenu() { menuOverlay.style.display = 'none'; }
+            // --- Меню ---
+            function toggleMenu() {
+                menuOverlay.style.display = menuOverlay.style.display === 'flex' ? 'none' : 'flex';
+            }
 
+            function closeMainMenu() {
+                menuOverlay.style.display = 'none';
+            }
+
+            // --- Тема ---
             function toggleTheme() {
                 document.body.classList.toggle('dark');
                 const isDark = document.body.classList.contains('dark');
@@ -827,183 +922,19 @@
                 saveSettingsToStorage();
             }
 
-            function showProfile() {
-                if (!currentUser) {
-                    alert('Вы не авторизованы');
-                    return;
-                }
-                let html = `
-                    <img class="profile-avatar" src="${userAvatar.src}" alt="Avatar">
-                    <div class="profile-name">${currentUser.username}</div>
-                `;
-                if (isOnGuild && userRoles.length > 0) {
-                    html += `<div><strong>Роли:</strong></div><div class="role-list">`;
-                    userRoles.forEach(roleId => {
-                        const roleName = guildRoles[roleId] || roleId;
-                        html += `<span class="role-badge">${roleName}</span>`;
-                    });
-                    html += `</div>`;
-                } else if (isOnGuild && userRoles.length === 0) {
-                    html += `<p><em>Нет ролей на сервере</em></p>`;
-                } else {
-                    html += `<p><em>Вы не состоите на сервере</em></p>`;
-                }
-
-                const stats = getMapStats();
-                html += `
-                    <div style="margin-top:15px; border-top:1px solid var(--border-color-light); padding-top:10px;">
-                        <strong>Статистика карты</strong>
-                        <div class="stats-grid">
-                            <div class="stats-item">Всего клеток: ${stats.total}</div>
-                            <div class="stats-item">Занятые: ${stats.green}</div>
-                            <div class="stats-item">Оккупированные: ${stats.red}</div>
-                            <div class="stats-item">Серая зона: ${stats.gray}</div>
-                            <div class="stats-item">Штабы: ${stats.blue}</div>
-                            <div class="stats-item">Свободные: ${stats.free}</div>
-                        </div>
-                    </div>
-                `;
-                profileContent.innerHTML = html;
-                profileOverlay.style.display = 'flex';
-            }
-
-            function closeProfile() { profileOverlay.style.display = 'none'; }
-
-            function getMapStats() {
-                let total = gridSize * gridSize;
-                let green = 0, red = 0, gray = 0, blue = 0;
-                for (const key in cellStates) {
-                    const status = cellStates[key];
-                    if (status === 'green') green++;
-                    else if (status === 'red') red++;
-                    else if (status === 'gray') gray++;
-                    else if (status === 'blue') blue++;
-                }
-                const free = total - green - red - gray - blue;
-                return { total, green, red, gray, blue, free };
-            }
-
-            function initiateDiscordLogin() {
-                const authUrl = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${DISCORD_REDIRECT_URI}&response_type=token&scope=${DISCORD_SCOPE}&prompt=consent`;
-                window.location.href = authUrl;
-            }
-
-            function checkForDiscordToken() {
-                const hash = window.location.hash.substring(1);
-                if (hash) {
-                    const params = new URLSearchParams(hash);
-                    const accessToken = params.get('access_token');
-                    const tokenType = params.get('token_type');
-                    if (accessToken && tokenType) {
-                        history.replaceState(null, null, window.location.pathname + window.location.search);
-                        fetch('https://discord.com/api/users/@me', {
-                            headers: { authorization: `${tokenType} ${accessToken}` }
-                        })
-                        .then(response => {
-                            if (!response.ok) throw new Error('User fetch failed');
-                            return response.json();
-                        })
-                        .then(user => {
-                            currentUser = user;
-                            userName.textContent = user.username;
-                            if (user.avatar) {
-                                userAvatar.src = `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`;
-                                userAvatar.style.display = 'inline-block';
-                            } else {
-                                userAvatar.style.display = 'none';
-                            }
-                            userInfoDisplay.style.display = 'flex';
-                            discordLoginButton.textContent = 'Выход';
-                            return fetch('https://discord.com/api/users/@me/guilds', {
-                                headers: { authorization: `${tokenType} ${accessToken}` }
-                            });
-                        })
-                        .then(response => {
-                            if (!response.ok) throw new Error('Guilds fetch failed');
-                            return response.json();
-                        })
-                        .then(guilds => {
-                            const targetGuild = guilds.find(g => g.id === GUILD_ID);
-                            if (targetGuild) {
-                                isOnGuild = true;
-                                return fetch(`https://discord.com/api/guilds/${GUILD_ID}/members/${currentUser.id}`, {
-                                    headers: { authorization: `Bearer ${accessToken}` }
-                                });
-                            } else {
-                                isOnGuild = false;
-                                userRoles = [];
-                                guildRoles = {};
-                                return null;
-                            }
-                        })
-                        .then(memberResponse => {
-                            if (memberResponse) {
-                                if (!memberResponse.ok) throw new Error('Member fetch failed');
-                                return memberResponse.json();
-                            }
-                            return null;
-                        })
-                        .then(member => {
-                            if (member) {
-                                userRoles = member.roles || [];
-                                return fetch(`https://discord.com/api/guilds/${GUILD_ID}/roles`, {
-                                    headers: { authorization: `Bearer ${accessToken}` }
-                                });
-                            }
-                            return null;
-                        })
-                        .then(rolesResponse => {
-                            if (rolesResponse) {
-                                if (!rolesResponse.ok) throw new Error('Roles fetch failed');
-                                return rolesResponse.json();
-                            }
-                            return null;
-                        })
-                        .then(roles => {
-                            if (roles) {
-                                roles.forEach(r => { guildRoles[r.id] = r.name; });
-                            }
-                            try {
-                                localStorage.setItem('userRoles', JSON.stringify({ roles: userRoles, guildRoles }));
-                            } catch(e) {}
-                        })
-                        .catch(err => {
-                            console.error('Ошибка при получении ролей:', err);
-                            alert('Не удалось загрузить роли. Проверьте права приложения.');
-                        });
-                    }
-                } else {
-                    const saved = localStorage.getItem('userRoles');
-                    if (saved) {
-                        try {
-                            const data = JSON.parse(saved);
-                            userRoles = data.roles || [];
-                            guildRoles = data.guildRoles || {};
-                            if (userRoles.length) isOnGuild = true;
-                        } catch(e) {}
-                    }
-                }
-            }
-
-            function logoutUser() {
-                currentUser = null;
-                userRoles = [];
-                guildRoles = {};
-                isOnGuild = false;
-                userInfoDisplay.style.display = 'none';
-                discordLoginButton.textContent = 'Войти через Discord';
-                localStorage.removeItem('userRoles');
-                window.location.href = window.location.pathname + window.location.search;
-            }
-
+            // --- Сохранение / загрузка ---
             function saveSettingsToStorage() {
+                const settings = {
+                    theme: document.body.classList.contains('dark') ? 'dark' : 'light',
+                    scale: scale,
+                    posX: posX,
+                    posY: posY
+                };
                 try {
-                    localStorage.setItem('mapSettings', JSON.stringify({
-                        theme: document.body.classList.contains('dark') ? 'dark' : 'light',
-                        scale, posX, posY
-                    }));
-                } catch(e) {}
+                    localStorage.setItem('mapSettings', JSON.stringify(settings));
+                } catch (e) { /* ignore */ }
             }
+
             function loadSettingsFromStorage() {
                 const saved = localStorage.getItem('mapSettings');
                 if (saved) {
@@ -1018,19 +949,84 @@
                             posX = settings.posX;
                             posY = settings.posY;
                         }
-                    } catch(e) { console.warn('Ошибка загрузки настроек', e); }
-                }
-            }
-            function saveCellStatesToStorage() {
-                try { localStorage.setItem('cellStates', JSON.stringify(cellStates)); } catch(e) {}
-            }
-            function loadCellStatesFromStorage() {
-                const saved = localStorage.getItem('cellStates');
-                if (saved) {
-                    try { cellStates = JSON.parse(saved); } catch(e) { cellStates = {}; }
+                    } catch (e) {
+                        console.warn('Ошибка загрузки настроек', e);
+                    }
                 }
             }
 
+            function saveCellStatesToStorage() {
+                try {
+                    localStorage.setItem('cellStates', JSON.stringify(cellStates));
+                } catch (e) { /* ignore */ }
+            }
+
+            function loadCellStatesFromStorage() {
+                const saved = localStorage.getItem('cellStates');
+                if (saved) {
+                    try {
+                        cellStates = JSON.parse(saved);
+                    } catch (e) {
+                        console.warn('Ошибка загрузки состояний клеток', e);
+                        cellStates = {};
+                    }
+                }
+            }
+
+            // --- Discord OAuth ---
+            function initiateDiscordLogin() {
+                const authUrl = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${DISCORD_REDIRECT_URI}&response_type=token&scope=${DISCORD_SCOPE}&prompt=consent`;
+                window.location.href = authUrl;
+            }
+
+            function checkForDiscordToken() {
+                const hash = window.location.hash.substring(1);
+                if (hash) {
+                    const params = new URLSearchParams(hash);
+                    const accessToken = params.get('access_token');
+                    const tokenType = params.get('token_type');
+                    if (accessToken && tokenType) {
+                        // Удаляем токен из URL
+                        history.replaceState(null, null, window.location.pathname + window.location.search);
+
+                        fetch('https://discord.com/api/users/@me', {
+                            headers: {
+                                authorization: `${tokenType} ${accessToken}`
+                            }
+                        })
+                        .then(response => {
+                            if (!response.ok) throw new Error('Discord API error');
+                            return response.json();
+                        })
+                        .then(user => {
+                            currentUser = user;
+                            userName.textContent = user.username;
+                            if (user.avatar) {
+                                userAvatar.src = `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`;
+                                userAvatar.style.display = 'inline-block';
+                            } else {
+                                userAvatar.style.display = 'none';
+                            }
+                            userInfoDisplay.style.display = 'flex';
+                            discordLoginButton.textContent = 'Выход';
+                        })
+                        .catch(err => {
+                            console.error('Ошибка получения данных пользователя', err);
+                            alert('Не удалось загрузить профиль Discord');
+                        });
+                    }
+                }
+            }
+
+            function logoutUser() {
+                currentUser = null;
+                userInfoDisplay.style.display = 'none';
+                discordLoginButton.textContent = 'Войти через Discord';
+                // Полностью перезагружаем страницу, чтобы очистить все возможные сохранённые токены
+                window.location.reload();
+            }
+
+            // --- Запуск ---
             window.addEventListener('load', initApp);
         })();
     </script>
